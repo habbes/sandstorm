@@ -7,19 +7,27 @@ using Azure.ResourceManager.Compute.Models;
 using Azure.ResourceManager.Network;
 using Azure.ResourceManager.Network.Models;
 using Azure.ResourceManager.Resources;
+using dotenv.net;
 using System.Diagnostics;
 
 
-const string AdminUsername = "<username>";
-const string AdminPassword = "<password>";
+
+
 
 
 // experiment 1: create Azure VM and check how long it takes to provision and start.
 
-var clientId = Environment.GetEnvironmentVariable("CLIENT_ID");
-var clientSecret = Environment.GetEnvironmentVariable("CLIENT_SECRET");
-var tenantId = Environment.GetEnvironmentVariable("TENANT_ID");
-var subscription = Environment.GetEnvironmentVariable("SUBSCRIPTION_ID");
+DotEnv.Load(options: new DotEnvOptions(probeForEnv: true, probeLevelsToSearch: 3));
+
+// Based on: https://learn.microsoft.com/en-us/samples/azure-samples/azure-samples-net-management/compute-manage-vm-extension/
+
+var clientId = Environment.GetEnvironmentVariable("CLIENT_ID") ?? throw new Exception("Client ID must be set in env vars");
+var clientSecret = Environment.GetEnvironmentVariable("CLIENT_SECRET") ?? throw new Exception("Client secret must be set in env vars");
+var tenantId = Environment.GetEnvironmentVariable("TENANT_ID") ?? throw new Exception("Tenant ID must be set in env vars");
+var subscription = Environment.GetEnvironmentVariable("SUBSCRIPTION_ID") ?? throw new Exception("Subscription ID must be set in env vars");
+
+var AdminUsername = Environment.GetEnvironmentVariable("ADMIN_USERNAME") ?? throw new Exception("Admin username must be set in env vars");
+var AdminPassword = Environment.GetEnvironmentVariable("ADMIN_PASSWORD") ?? throw new Exception("Admin password must be set in env vars");
 
 ClientSecretCredential credential = new ClientSecretCredential(tenantId, clientId, clientSecret);
 ArmClient client = new ArmClient(credential, subscription);
@@ -36,10 +44,14 @@ Console.WriteLine("--------Finish create group--------");
 Console.WriteLine($"Finished resource group creation after {sw.ElapsedMilliseconds} ms");
 
 // Create a Virtual Machine
-await CreateVmAsync(resourceGroup, resourceGroupName, location, "quickstartvm");
+await CreateVmAsync(resourceGroup, resourceGroupName, location, "quickstartvm", AdminUsername, AdminPassword);
 
 Console.WriteLine($"Finished VM creation after {sw.ElapsedMilliseconds} ms");
 
+Console.WriteLine("Prease any key to delete the resource group");
+Console.ReadKey();
+
+sw.Restart();
 await resourceGroup.DeleteAsync(Azure.WaitUntil.Completed);
 Console.WriteLine($"Finished resource group deletion after {sw.ElapsedMilliseconds} ms");
 
@@ -48,18 +60,24 @@ static async Task CreateVmAsync(
             ResourceGroupResource resourcegroup,
             string resourceGroupName,
             string location,
-            string vmName)
+            string vmName,
+            string adminUsername,
+            string adminPassword)
 {
     var collection = resourcegroup.GetVirtualMachines();
 
     // Create VNet
     Console.WriteLine("--------Start create VNet--------");
-    var vnet = new VirtualNetworkData()
+    var vnetData = new VirtualNetworkData()
     {
         Location = location,
         AddressPrefixes = { "10.0.0.0/16" },
         Subnets = { new SubnetData() { Name = "SubnetSampleName", AddressPrefix = "10.0.0.0/28" } }
     };
+
+    var vnetCollection = resourcegroup.GetVirtualNetworks();
+    var vnet = (await vnetCollection.CreateOrUpdateAsync(Azure.WaitUntil.Completed, "SampleVNet", vnetData)).Value;
+    Console.WriteLine("--------Done create VNet--------");
 
     // Create Network Interface
     Console.WriteLine("--------Start create Network Interface--------");
@@ -74,7 +92,7 @@ static async Task CreateVmAsync(
                             Primary = false,
                             Subnet = new SubnetData()
                             {
-                                Id = vnet.Subnets.ElementAt(0).Id
+                                Id = vnet.GetSubnets().ElementAt(0).Id
                             }
                         }
                     }
@@ -92,8 +110,8 @@ static async Task CreateVmAsync(
         },
         OSProfile = new VirtualMachineOSProfile()
         {
-            AdminUsername = AdminUsername,
-            AdminPassword = AdminPassword,
+            AdminUsername = adminUsername,
+            AdminPassword = adminPassword,
             ComputerName = "linux Compute",
             LinuxConfiguration = new LinuxConfiguration()
             {

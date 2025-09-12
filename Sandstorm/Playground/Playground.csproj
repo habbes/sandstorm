@@ -7,4 +7,12 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Azure.Identity" Version="1.16.0" />
+    <PackageReference Include="Azure.ResourceManager.Compute" Version="1.11.0" />
+    <PackageReference Include="Azure.ResourceManager.Network" Version="1.11.3" />
+    <PackageReference Include="Azure.ResourceManager.Resources" Version="1.11.1" />
+    <PackageReference Include="dotenv.net" Version="4.0.0" />
+  </ItemGroup>
+
 </Project>
