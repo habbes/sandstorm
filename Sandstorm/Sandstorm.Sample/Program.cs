@@ -1,7 +1,6 @@
 ﻿using Azure.Identity;
 using dotenv.net;
 using Microsoft.Extensions.Logging;
-using Moq;
 using Sandstorm.Core;
 using Sandstorm.Core.Providers;
 
@@ -22,52 +21,28 @@ try
     // Create Azure provider and SandstormClient - the ONLY interface the sample should use
     Console.WriteLine("Initializing Sandstorm client...");
     
-    // Use environment variables or defaults for Azure credentials
-    var tenantId = Environment.GetEnvironmentVariable("AZURE_TENANT_ID") ?? "demo-tenant";
-    var clientId = Environment.GetEnvironmentVariable("AZURE_CLIENT_ID") ?? "demo-client";
-    var clientSecret = Environment.GetEnvironmentVariable("AZURE_CLIENT_SECRET") ?? "demo-secret";
-    var subscriptionId = Environment.GetEnvironmentVariable("AZURE_SUBSCRIPTION_ID") ?? "demo-subscription";
+    // Use environment variables for Azure credentials - REAL credentials required
+    var tenantId = Environment.GetEnvironmentVariable("AZURE_TENANT_ID");
+    var clientId = Environment.GetEnvironmentVariable("AZURE_CLIENT_ID");
+    var clientSecret = Environment.GetEnvironmentVariable("AZURE_CLIENT_SECRET");
+    var subscriptionId = Environment.GetEnvironmentVariable("AZURE_SUBSCRIPTION_ID");
     
-    // Create the cloud provider
-    ICloudProvider cloudProvider;
+    // Validate that all required Azure credentials are provided
+    if (string.IsNullOrEmpty(tenantId) || string.IsNullOrEmpty(clientId) || 
+        string.IsNullOrEmpty(clientSecret) || string.IsNullOrEmpty(subscriptionId))
+    {
+        throw new InvalidOperationException(
+            "Azure credentials are required for real end-to-end provisioning. " +
+            "Please set the following environment variables:\n" +
+            "- AZURE_TENANT_ID\n" +
+            "- AZURE_CLIENT_ID\n" +
+            "- AZURE_CLIENT_SECRET\n" +
+            "- AZURE_SUBSCRIPTION_ID");
+    }
     
-    if (tenantId.StartsWith("demo-") || string.IsNullOrEmpty(Environment.GetEnvironmentVariable("AZURE_TENANT_ID")))
-    {
-        Console.WriteLine("⚠️  Using mock Azure provider (set Azure environment variables for real provisioning)");
-        // For demo purposes when Azure credentials are not available
-        var mockProvider = new Mock<ICloudProvider>();
-        mockProvider.Setup(p => p.CreateSandboxAsync(It.IsAny<SandboxConfiguration>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-                   .ReturnsAsync((SandboxConfiguration config, string endpoint, CancellationToken ct) =>
-                   {
-                       var mockSandbox = new Mock<ISandbox>();
-                       mockSandbox.Setup(s => s.SandboxId).Returns($"sandbox-{Guid.NewGuid():N}");
-                       mockSandbox.Setup(s => s.Status).Returns(SandboxStatus.Ready);
-                       mockSandbox.Setup(s => s.Configuration).Returns(config);
-                       mockSandbox.Setup(s => s.PublicIpAddress).Returns("10.0.0.4");
-                       mockSandbox.Setup(s => s.WaitForReadyAsync(It.IsAny<CancellationToken>()))
-                                  .Returns(Task.CompletedTask);
-                       mockSandbox.Setup(s => s.RunCommandAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-                                  .ReturnsAsync((string cmd, CancellationToken ct) =>
-                                  {
-                                      var mockProcess = new Mock<IProcess>();
-                                      mockProcess.Setup(p => p.WaitForCompletionAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new ExecutionResult
-                                      {
-                                          ExitCode = 0,
-                                          StandardOutput = $"Command executed: {cmd}",
-                                          StandardError = "",
-                                          Duration = TimeSpan.FromMilliseconds(100)
-                                      });
-                                      return mockProcess.Object;
-                                  });
-                       return mockSandbox.Object;
-                   });
-        cloudProvider = mockProvider.Object;
-    }
-    else
-    {
-        Console.WriteLine("🔧 Using real Azure provider");
-        cloudProvider = new AzureProvider(tenantId, clientId, clientSecret, subscriptionId);
-    }
+    // Create the real Azure cloud provider - NO MOCKING
+    Console.WriteLine("🔧 Using real Azure provider");
+    var cloudProvider = new AzureProvider(tenantId, clientId, clientSecret, subscriptionId);
     
     // Create the SandstormClient - this is the ONLY interface the sample should use
     var client = new SandstormClient(cloudProvider, "http://localhost:5000");
@@ -152,15 +127,15 @@ catch (Exception ex)
 {
     Console.WriteLine($"❌ Error: {ex.Message}");
     Console.WriteLine();
-    Console.WriteLine("💡 For full demo with real Azure resources:");
-    Console.WriteLine("   1. Set Azure environment variables (AZURE_TENANT_ID, AZURE_CLIENT_ID, etc.)");
+    Console.WriteLine("💡 To run the real end-to-end demo:");
+    Console.WriteLine("   1. Set Azure environment variables (AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_SUBSCRIPTION_ID)");
     Console.WriteLine("   2. Start orchestrator: cd Sandstorm.Orchestrator && dotnet run");
-    Console.WriteLine("   3. Run this demo");
+    Console.WriteLine("   3. Run this demo for real Azure VM provisioning and command execution");
     Console.WriteLine();
-    Console.WriteLine("💡 For testing with orchestrator only:");
+    Console.WriteLine("💡 For local testing with existing agent:");
     Console.WriteLine("   1. Start orchestrator: cd Sandstorm.Orchestrator && dotnet run");
     Console.WriteLine("   2. Start agent: cd Sandstorm.Agent && SANDSTORM_SANDBOX_ID=demo-sandbox dotnet run");
-    Console.WriteLine("   3. Run this demo with mock provider");
+    Console.WriteLine("   3. Set Azure credentials and run this demo");
 }
 
 Console.WriteLine("\nDemo completed. Press any key to exit...");
