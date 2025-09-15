@@ -27,7 +27,7 @@ public class OrchestratorService : Grpc.OrchestratorService.OrchestratorServiceB
             VmId = request.VmId,
             AgentVersion = request.AgentVersion,
             LastHeartbeat = DateTime.UtcNow,
-            Status = AgentStatus.AgentReady,
+            Status = AgentStatus.AgentReady, // Set to ready immediately upon registration
             CommandStream = null,
             Context = context
         };
@@ -143,6 +143,15 @@ public class OrchestratorService : Grpc.OrchestratorService.OrchestratorServiceB
     // Public methods for sandbox operations
     public async Task<CommandResult?> ExecuteCommandAsync(string sandboxId, string command, TimeSpan timeout, CancellationToken cancellationToken = default)
     {
+        _logger.LogInformation("Looking for agent for sandbox {SandboxId}. Total agents: {AgentCount}", sandboxId, _agents.Count);
+        
+        // Log all agents for debugging
+        foreach (var agentPair in _agents)
+        {
+            _logger.LogInformation("Agent {AgentId}: Sandbox={SandboxId}, Status={Status}", 
+                agentPair.Value.AgentId, agentPair.Value.SandboxId, agentPair.Value.Status);
+        }
+        
         var agent = _agents.Values.FirstOrDefault(a => a.SandboxId == sandboxId && a.Status == AgentStatus.AgentReady);
         if (agent == null)
         {
