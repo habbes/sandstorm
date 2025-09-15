@@ -282,32 +282,40 @@ write_files:
       mkdir -p /opt/sandstorm/agent
       mkdir -p /var/log/sandstorm
       
+      # Install required packages
+      apt-get update
+      apt-get install -y git curl
+      
       # Download and install .NET if not already present
       if ! command -v dotnet &> /dev/null; then
           curl -fsSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel 8.0
           export PATH=""$PATH:$HOME/.dotnet""
+          echo 'export PATH=""$PATH:$HOME/.dotnet""' >> /etc/environment
       fi
       
-      # For demo purposes, create a simple agent placeholder
-      # In production, this would download the actual agent binary
+      # Clone the repository and build the agent
+      cd /tmp
+      git clone https://github.com/habbes/sandstorm.git
+      cd sandstorm/Sandstorm
+      
+      # Build the agent as a self-contained binary for Linux
+      $HOME/.dotnet/dotnet publish Sandstorm.Agent/Sandstorm.Agent.csproj \
+          -c Release \
+          -o /opt/sandstorm/agent \
+          --self-contained true \
+          -r linux-x64 \
+          -p:PublishSingleFile=true \
+          -p:IncludeNativeLibrariesForSelfExtract=true
+      
+      # Create wrapper script for the service
       cat > /opt/sandstorm/agent/run-agent.sh << 'AGENT_EOF'
       #!/bin/bash
       source /etc/environment
-      
-      echo ""Sandstorm Agent starting...""
-      echo ""Sandbox ID: $SANDSTORM_SANDBOX_ID""
-      echo ""VM ID: $SANDSTORM_VM_ID""
-      echo ""Orchestrator: $SANDSTORM_ORCHESTRATOR_ENDPOINT""
-      
-      # Agent would connect to orchestrator here
-      # For now, just log and keep running
-      while true; do
-          echo ""[$(date)] Agent heartbeat - Sandbox: $SANDSTORM_SANDBOX_ID""
-          sleep 30
-      done
+      exec /opt/sandstorm/agent/Sandstorm.Agent
       AGENT_EOF
       
       chmod +x /opt/sandstorm/agent/run-agent.sh
+      chmod +x /opt/sandstorm/agent/Sandstorm.Agent
       
       # Create systemd service
       cat > /etc/systemd/system/sandstorm-agent.service << 'SERVICE_EOF'
