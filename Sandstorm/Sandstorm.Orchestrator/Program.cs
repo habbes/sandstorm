@@ -2,6 +2,15 @@ using Sandstorm.Orchestrator.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Configure Kestrel to support HTTP/2 without TLS for gRPC
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.ListenLocalhost(5000, listenOptions =>
+    {
+        listenOptions.Protocols = Microsoft.AspNetCore.Server.Kestrel.Core.HttpProtocols.Http2;
+    });
+});
+
 // Add services to the container.
 builder.Services.AddGrpc();
 builder.Services.AddLogging();

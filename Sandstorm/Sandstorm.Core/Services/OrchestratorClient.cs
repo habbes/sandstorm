@@ -35,23 +35,21 @@ public class OrchestratorClient : IDisposable
         {
             _logger?.LogDebug("Sending command to orchestrator for sandbox {SandboxId}: {Command}", sandboxId, command);
 
-            // For now, we'll simulate the orchestrator functionality
-            // In a complete implementation, we would make a gRPC call to the orchestrator
-            // The orchestrator would then send the command to the appropriate agent
-            
-            var startTime = DateTime.UtcNow;
-            
-            // Simulate command execution through orchestrator
-            await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
-            
-            var duration = DateTime.UtcNow - startTime;
-            
+            var request = new Orchestrator.Grpc.ExecuteCommandRequest
+            {
+                SandboxId = sandboxId,
+                Command = command,
+                TimeoutSeconds = (int)timeout.TotalSeconds
+            };
+
+            var response = await _client.ExecuteCommandAsync(request, cancellationToken: cancellationToken);
+
             return new ExecutionResult
             {
-                ExitCode = 0,
-                StandardOutput = $"[Orchestrator] Command executed via agent: {command}",
-                StandardError = "",
-                Duration = duration
+                ExitCode = response.ExitCode,
+                StandardOutput = response.StandardOutput,
+                StandardError = response.StandardError,
+                Duration = TimeSpan.FromMilliseconds(response.DurationMilliseconds)
             };
         }
         catch (Exception ex)
@@ -78,13 +76,17 @@ public class OrchestratorClient : IDisposable
     {
         try
         {
-            // For now, assume sandbox is ready after a short delay
-            // In a complete implementation, this would check with the orchestrator
-            await Task.Delay(100, cancellationToken);
-            return true;
+            var request = new Orchestrator.Grpc.IsSandboxReadyRequest
+            {
+                SandboxId = sandboxId
+            };
+
+            var response = await _client.IsSandboxReadyAsync(request, cancellationToken: cancellationToken);
+            return response.Ready;
         }
-        catch
+        catch (Exception ex)
         {
+            _logger?.LogError(ex, "Failed to check sandbox readiness for {SandboxId}", sandboxId);
             return false;
         }
     }
