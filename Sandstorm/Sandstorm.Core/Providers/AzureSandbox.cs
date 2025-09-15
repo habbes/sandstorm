@@ -6,9 +6,9 @@ using Azure.ResourceManager.Network;
 using Azure.ResourceManager.Network.Models;
 using Azure.ResourceManager.Resources;
 using Microsoft.Extensions.Logging;
+using Sandstorm.Core.Services;
 using System.Diagnostics;
 using System.Text;
-using Renci.SshNet;
 
 namespace Sandstorm.Core.Providers;
 
@@ -19,6 +19,7 @@ internal class AzureSandbox : ISandbox
 {
     private readonly SandboxConfiguration _configuration;
     private readonly string _resourceGroupName;
+    private readonly string _orchestratorEndpoint;
     private readonly ArmClient _armClient;
     private readonly ILogger? _logger;
     private readonly string _sandboxId;
@@ -27,15 +28,20 @@ internal class AzureSandbox : ISandbox
     private VirtualMachineResource? _virtualMachine;
     private SandboxStatus _status = SandboxStatus.Creating;
     private string? _publicIpAddress;
+    private OrchestratorClient? _orchestratorClient;
     private bool _disposed = false;
 
-    public AzureSandbox(SandboxConfiguration configuration, string resourceGroupName, ArmClient armClient, ILogger? logger)
+    public AzureSandbox(SandboxConfiguration configuration, string resourceGroupName, string orchestratorEndpoint, ArmClient armClient, ILogger? logger)
     {
         _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         _resourceGroupName = resourceGroupName ?? throw new ArgumentNullException(nameof(resourceGroupName));
+        _orchestratorEndpoint = orchestratorEndpoint ?? throw new ArgumentNullException(nameof(orchestratorEndpoint));
         _armClient = armClient ?? throw new ArgumentNullException(nameof(armClient));
         _logger = logger;
         _sandboxId = $"sandbox-{Guid.NewGuid():N}";
+        
+        // Initialize orchestrator client
+        _orchestratorClient = new OrchestratorClient(_orchestratorEndpoint, _logger);
     }
 
     public string SandboxId => _sandboxId;
@@ -235,8 +241,8 @@ internal class AzureSandbox : ISandbox
     }
 
     private string GenerateCloudInitScript()
-    {
-        return @"#cloud-config
+    {        
+        return $@"#cloud-config
 package_update: true
 package_upgrade: true
 packages:
@@ -251,13 +257,95 @@ packages:
   - vim
   - htop
   - unzip
+write_files:
+  - path: /etc/environment
+    content: |
+      SANDSTORM_SANDBOX_ID={_sandboxId}
+      SANDSTORM_VM_ID={Environment.MachineName}
+      SANDSTORM_ORCHESTRATOR_ENDPOINT={_orchestratorEndpoint}
+    append: true
+  - path: /opt/sandstorm/install-agent.sh
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      set -e
+      
+      echo ""Installing Sandstorm Agent...""
+      
+      # Create sandstorm user
+      useradd -m -s /bin/bash sandstorm || true
+      
+      # Create directories
+      mkdir -p /opt/sandstorm/agent
+      mkdir -p /var/log/sandstorm
+      
+      # Install required packages
+      apt-get update
+      apt-get install -y git curl
+      
+      # Download and install .NET if not already present
+      if ! command -v dotnet &> /dev/null; then
+          curl -fsSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel 8.0
+          export PATH=""$PATH:$HOME/.dotnet""
+          echo 'export PATH=""$PATH:$HOME/.dotnet""' >> /etc/environment
+      fi
+      
+      # Clone the repository and build the agent
+      cd /tmp
+      git clone https://github.com/habbes/sandstorm.git
+      cd sandstorm/Sandstorm
+      
+      # Build the agent as AOT binary for Linux
+      $HOME/.dotnet/dotnet publish Sandstorm.Agent/Sandstorm.Agent.csproj \
+          -c Release \
+          -o /opt/sandstorm/agent \
+          -r linux-x64
+      
+      # Create wrapper script for the service
+      cat > /opt/sandstorm/agent/run-agent.sh << 'AGENT_EOF'
+      #!/bin/bash
+      source /etc/environment
+      exec /opt/sandstorm/agent/Sandstorm.Agent
+      AGENT_EOF
+      
+      chmod +x /opt/sandstorm/agent/run-agent.sh
+      chmod +x /opt/sandstorm/agent/Sandstorm.Agent
+      
+      # Create systemd service
+      cat > /etc/systemd/system/sandstorm-agent.service << 'SERVICE_EOF'
+      [Unit]
+      Description=Sandstorm Agent
+      After=network.target
+      
+      [Service]
+      Type=simple
+      User=sandstorm
+      WorkingDirectory=/opt/sandstorm/agent
+      ExecStart=/opt/sandstorm/agent/run-agent.sh
+      Restart=always
+      RestartSec=5
+      StandardOutput=journal
+      StandardError=journal
+      EnvironmentFile=/etc/environment
+      
+      [Install]
+      WantedBy=multi-user.target
+      SERVICE_EOF
+      
+      # Enable and start the service
+      systemctl daemon-reload
+      systemctl enable sandstorm-agent
+      systemctl start sandstorm-agent
+      
+      echo ""Sandstorm Agent installation complete""
 runcmd:
   - curl -fsSL https://get.docker.com -o get-docker.sh
   - sh get-docker.sh
-  - usermod -aG docker $USER
+  - usermod -aG docker ubuntu
   - systemctl enable docker
   - systemctl start docker
   - pip3 install --upgrade pip
+  - /opt/sandstorm/install-agent.sh
   - echo 'Sandbox initialization complete' > /var/log/sandbox-ready.log
 ";
     }
@@ -459,56 +547,75 @@ runcmd:
         if (string.IsNullOrWhiteSpace(command))
             throw new ArgumentException("Command cannot be null or empty", nameof(command));
 
+        // Use orchestrator if available, otherwise fall back to SSH
+        if (_orchestratorClient != null)
+        {
+            return await ExecuteCommandViaOrchestratorAsync(command, cancellationToken);
+        }
+        else
+        {
+            return await ExecuteCommandViaSshAsync(command, cancellationToken);
+        }
+    }
+
+    private async Task<ExecutionResult> ExecuteCommandViaOrchestratorAsync(string command, CancellationToken cancellationToken)
+    {
+        if (_orchestratorClient == null)
+            throw new InvalidOperationException("Orchestrator client not initialized");
+
+        _logger?.LogDebug("Executing command via orchestrator for sandbox {SandboxId}: {Command}", _sandboxId, command);
+
+        try
+        {
+            // Wait for agent to be ready
+            var isReady = await _orchestratorClient.IsSandboxReadyAsync(_sandboxId, cancellationToken);
+            if (!isReady)
+            {
+                return new ExecutionResult
+                {
+                    ExitCode = -1,
+                    StandardOutput = "",
+                    StandardError = "Sandbox agent is not ready",
+                    Duration = TimeSpan.Zero
+                };
+            }
+
+            // Execute command through orchestrator
+            return await _orchestratorClient.ExecuteCommandAsync(_sandboxId, command, TimeSpan.FromMinutes(5), cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Failed to execute command via orchestrator for sandbox {SandboxId}: {Command}", _sandboxId, command);
+            
+            return new ExecutionResult
+            {
+                ExitCode = -1,
+                StandardOutput = "",
+                StandardError = $"Orchestrator execution failed: {ex.Message}",
+                Duration = TimeSpan.Zero
+            };
+        }
+    }
+
+    private async Task<ExecutionResult> ExecuteCommandViaSshAsync(string command, CancellationToken cancellationToken)
+    {
         if (_publicIpAddress == null)
             throw new InvalidOperationException("VM not ready - no public IP address available");
 
         var startTime = DateTime.UtcNow;
         
-        try
+        // For now, return a simulated error indicating SSH is deprecated
+        var duration = DateTime.UtcNow - startTime;
+        
+        _logger?.LogWarning("SSH execution is deprecated. Please configure an orchestrator endpoint.");
+        
+        return new ExecutionResult
         {
-            _logger?.LogDebug("Executing command on VM {PublicIpAddress}: {Command}", _publicIpAddress, command);
-
-            using var client = new SshClient(_publicIpAddress, _configuration.AdminUsername, _configuration.AdminPassword);
-            
-            // Set connection timeout
-            client.ConnectionInfo.Timeout = TimeSpan.FromSeconds(30);
-            
-            await Task.Run(() => client.Connect(), cancellationToken);
-            
-            if (!client.IsConnected)
-            {
-                throw new InvalidOperationException("Failed to establish SSH connection to VM");
-            }
-
-            using var sshCommand = client.CreateCommand(command);
-            var result = await Task.Run(() => sshCommand.Execute(), cancellationToken);
-            
-            var duration = DateTime.UtcNow - startTime;
-            
-            _logger?.LogDebug("Command completed with exit code {ExitCode} in {Duration}ms", 
-                sshCommand.ExitStatus ?? -1, duration.TotalMilliseconds);
-
-            return new ExecutionResult
-            {
-                ExitCode = sshCommand.ExitStatus ?? -1,
-                StandardOutput = result,
-                StandardError = sshCommand.Error,
-                Duration = duration
-            };
-        }
-        catch (Exception ex) when (!(ex is OperationCanceledException))
-        {
-            _logger?.LogError(ex, "Failed to execute command on VM {PublicIpAddress}: {Command}", _publicIpAddress, command);
-            
-            var duration = DateTime.UtcNow - startTime;
-            return new ExecutionResult
-            {
-                ExitCode = -1,
-                StandardOutput = "",
-                StandardError = $"SSH execution failed: {ex.Message}",
-                Duration = duration
-            };
-        }
+            ExitCode = -1,
+            StandardOutput = "",
+            StandardError = "SSH execution is deprecated. The sandbox uses an orchestrator-agent architecture for better security. Please configure the OrchestratorEndpoint in your SandboxConfiguration.",
+            Duration = duration
+        };
     }
 
     public async ValueTask DisposeAsync()
@@ -519,6 +626,10 @@ runcmd:
         }
 
         _disposed = true;
+        
+        // Dispose orchestrator client
+        _orchestratorClient?.Dispose();
+        
         await DeleteAsync();
     }
 }

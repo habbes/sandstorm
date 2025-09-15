@@ -27,6 +27,32 @@ public class SandstormClientTests
         // Assert
         Assert.NotNull(client);
         Assert.NotNull(client.Sandboxes);
+        Assert.Equal("http://localhost:5000", client.OrchestratorEndpoint);
+    }
+
+    [Fact]
+    public void SandstormClient_Constructor_AcceptsCustomOrchestratorEndpoint()
+    {
+        // Arrange
+        var mockProvider = new Mock<ICloudProvider>();
+        var customEndpoint = "https://orchestrator.example.com";
+        
+        // Act
+        var client = new SandstormClient(mockProvider.Object, customEndpoint);
+        
+        // Assert
+        Assert.NotNull(client);
+        Assert.Equal(customEndpoint, client.OrchestratorEndpoint);
+    }
+
+    [Fact]
+    public void SandstormClient_Constructor_RequiresOrchestratorEndpoint()
+    {
+        // Arrange
+        var mockProvider = new Mock<ICloudProvider>();
+        
+        // Act & Assert
+        Assert.Throws<ArgumentNullException>(() => new SandstormClient(mockProvider.Object, null!));
     }
 
     [Fact]
@@ -36,7 +62,7 @@ public class SandstormClientTests
         var mockProvider = new Mock<ICloudProvider>();
         var mockSandbox = new Mock<ISandbox>();
         
-        mockProvider.Setup(p => p.CreateSandboxAsync(It.IsAny<SandboxConfiguration>(), It.IsAny<CancellationToken>()))
+        mockProvider.Setup(p => p.CreateSandboxAsync(It.IsAny<SandboxConfiguration>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
                    .ReturnsAsync(mockSandbox.Object);
         
         var client = new SandstormClient(mockProvider.Object);
@@ -46,7 +72,7 @@ public class SandstormClientTests
         
         // Assert
         Assert.NotNull(sandbox);
-        mockProvider.Verify(p => p.CreateSandboxAsync(It.IsAny<SandboxConfiguration>(), It.IsAny<CancellationToken>()), Times.Once);
+        mockProvider.Verify(p => p.CreateSandboxAsync(It.IsAny<SandboxConfiguration>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -57,7 +83,7 @@ public class SandstormClientTests
         var mockSandbox = new Mock<ISandbox>();
         var config = new SandboxConfiguration { Name = "test-sandbox" };
         
-        mockProvider.Setup(p => p.CreateSandboxAsync(config, It.IsAny<CancellationToken>()))
+        mockProvider.Setup(p => p.CreateSandboxAsync(config, It.IsAny<string>(), It.IsAny<CancellationToken>()))
                    .ReturnsAsync(mockSandbox.Object);
         
         var client = new SandstormClient(mockProvider.Object);
@@ -67,7 +93,7 @@ public class SandstormClientTests
         
         // Assert
         Assert.NotNull(sandbox);
-        mockProvider.Verify(p => p.CreateSandboxAsync(config, It.IsAny<CancellationToken>()), Times.Once);
+        mockProvider.Verify(p => p.CreateSandboxAsync(config, It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 }
 

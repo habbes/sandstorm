@@ -1,0 +1,121 @@
+syntax = "proto3";
+
+option csharp_namespace = "Sandstorm.Orchestrator.Grpc";
+
+package orchestrator;
+
+// The Orchestrator service manages sandboxes and communicates with agents
+service OrchestratorService {
+  // Agent registers itself with the orchestrator
+  rpc RegisterAgent(RegisterAgentRequest) returns (RegisterAgentResponse);
+  
+  // Agent sends heartbeat to indicate it's alive
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+  
+  // Agent receives commands to execute from orchestrator
+  rpc GetCommands(GetCommandsRequest) returns (stream CommandRequest);
+  
+  // Agent sends command execution results back to orchestrator
+  rpc SendCommandResult(CommandResult) returns (CommandResultResponse);
+  
+  // Agent sends log messages to orchestrator
+  rpc SendLogs(stream LogMessage) returns (LogResponse);
+}
+
+// Agent registration request
+message RegisterAgentRequest {
+  string agent_id = 1;
+  string sandbox_id = 2;
+  string vm_id = 3;
+  string agent_version = 4;
+  map<string, string> metadata = 5;
+}
+
+message RegisterAgentResponse {
+  bool success = 1;
+  string message = 2;
+  int32 heartbeat_interval_seconds = 3;
+}
+
+// Heartbeat messages
+message HeartbeatRequest {
+  string agent_id = 1;
+  string sandbox_id = 2;
+  AgentStatus status = 3;
+  ResourceUsage resource_usage = 4;
+}
+
+message HeartbeatResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// Command execution
+message GetCommandsRequest {
+  string agent_id = 1;
+  string sandbox_id = 2;
+}
+
+message CommandRequest {
+  string command_id = 1;
+  string command = 2;
+  string working_directory = 3;
+  map<string, string> environment_variables = 4;
+  int32 timeout_seconds = 5;
+}
+
+message CommandResult {
+  string command_id = 1;
+  string agent_id = 2;
+  int32 exit_code = 3;
+  string standard_output = 4;
+  string standard_error = 5;
+  int64 duration_milliseconds = 6;
+  bool success = 7;
+}
+
+message CommandResultResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// Logging
+message LogMessage {
+  string agent_id = 1;
+  string sandbox_id = 2;
+  LogLevel level = 3;
+  string message = 4;
+  int64 timestamp = 5;
+  string source = 6;
+}
+
+message LogResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// Supporting types
+enum AgentStatus {
+  AGENT_UNKNOWN = 0;
+  AGENT_STARTING = 1;
+  AGENT_READY = 2;
+  AGENT_BUSY = 3;
+  AGENT_ERROR = 4;
+  AGENT_STOPPING = 5;
+}
+
+enum LogLevel {
+  LOG_TRACE = 0;
+  LOG_DEBUG = 1;
+  LOG_INFO = 2;
+  LOG_WARN = 3;
+  LOG_ERROR = 4;
+  LOG_FATAL = 5;
+}
+
+message ResourceUsage {
+  double cpu_percent = 1;
+  int64 memory_bytes = 2;
+  int64 disk_bytes = 3;
+  int32 process_count = 4;
+}

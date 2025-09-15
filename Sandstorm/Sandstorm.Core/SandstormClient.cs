@@ -14,17 +14,24 @@ public class SandstormClient
     /// Initializes a new instance of the SandstormClient
     /// </summary>
     /// <param name="cloudProvider">The cloud provider to use for creating sandboxes</param>
+    /// <param name="orchestratorEndpoint">The orchestrator endpoint for agent communication</param>
     /// <param name="logger">Optional logger for diagnostics</param>
-    public SandstormClient(ICloudProvider cloudProvider, ILogger<SandstormClient>? logger = null)
+    public SandstormClient(ICloudProvider cloudProvider, string orchestratorEndpoint = "http://localhost:5000", ILogger<SandstormClient>? logger = null)
     {
         _cloudProvider = cloudProvider ?? throw new ArgumentNullException(nameof(cloudProvider));
+        OrchestratorEndpoint = orchestratorEndpoint ?? throw new ArgumentNullException(nameof(orchestratorEndpoint));
         _logger = logger;
     }
 
     /// <summary>
+    /// The orchestrator endpoint for agent communication
+    /// </summary>
+    public string OrchestratorEndpoint { get; }
+
+    /// <summary>
     /// Gets the sandboxes management interface
     /// </summary>
-    public ISandboxManager Sandboxes => new SandboxManager(_cloudProvider, _logger);
+    public ISandboxManager Sandboxes => new SandboxManager(_cloudProvider, OrchestratorEndpoint, _logger);
 }
 
 /// <summary>
@@ -69,11 +76,13 @@ public interface ISandboxManager
 internal class SandboxManager : ISandboxManager
 {
     private readonly ICloudProvider _cloudProvider;
+    private readonly string _orchestratorEndpoint;
     private readonly ILogger? _logger;
 
-    public SandboxManager(ICloudProvider cloudProvider, ILogger? logger)
+    public SandboxManager(ICloudProvider cloudProvider, string orchestratorEndpoint, ILogger? logger)
     {
         _cloudProvider = cloudProvider;
+        _orchestratorEndpoint = orchestratorEndpoint;
         _logger = logger;
     }
 
@@ -86,7 +95,7 @@ internal class SandboxManager : ISandboxManager
     {
         _logger?.LogInformation("Creating sandbox with name: {SandboxName}", configuration.Name);
         
-        var sandbox = await _cloudProvider.CreateSandboxAsync(configuration, cancellationToken);
+        var sandbox = await _cloudProvider.CreateSandboxAsync(configuration, _orchestratorEndpoint, cancellationToken);
         
         _logger?.LogInformation("Sandbox created with ID: {SandboxId}", sandbox.SandboxId);
         
