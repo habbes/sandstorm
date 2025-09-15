@@ -20,6 +20,12 @@ service OrchestratorService {
   
   // Agent sends log messages to orchestrator
   rpc SendLogs(stream LogMessage) returns (LogResponse);
+  
+  // Client executes a command on a sandbox through the orchestrator
+  rpc ExecuteCommand(ExecuteCommandRequest) returns (ExecuteCommandResponse);
+  
+  // Client checks if a sandbox is ready
+  rpc IsSandboxReady(IsSandboxReadyRequest) returns (IsSandboxReadyResponse);
 }
 
 // Agent registration request
@@ -118,4 +124,32 @@ message ResourceUsage {
   int64 memory_bytes = 2;
   int64 disk_bytes = 3;
   int32 process_count = 4;
+}
+
+// Client command execution requests
+message ExecuteCommandRequest {
+  string sandbox_id = 1;
+  string command = 2;
+  string working_directory = 3;
+  map<string, string> environment_variables = 4;
+  int32 timeout_seconds = 5;
+}
+
+message ExecuteCommandResponse {
+  bool success = 1;
+  string message = 2;
+  int32 exit_code = 3;
+  string standard_output = 4;
+  string standard_error = 5;
+  int64 duration_milliseconds = 6;
+}
+
+// Sandbox readiness check
+message IsSandboxReadyRequest {
+  string sandbox_id = 1;
+}
+
+message IsSandboxReadyResponse {
+  bool ready = 1;
+  string message = 2;
 }

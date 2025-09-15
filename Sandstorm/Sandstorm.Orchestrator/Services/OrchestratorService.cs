@@ -187,6 +187,61 @@ public class OrchestratorService : Grpc.OrchestratorService.OrchestratorServiceB
         return _agents.Values.Where(a => DateTime.UtcNow - a.LastHeartbeat < TimeSpan.FromMinutes(2));
     }
 
+    public override async Task<ExecuteCommandResponse> ExecuteCommand(ExecuteCommandRequest request, ServerCallContext context)
+    {
+        _logger.LogInformation("Executing command for sandbox {SandboxId}: {Command}", request.SandboxId, request.Command);
+
+        try
+        {
+            var timeout = request.TimeoutSeconds > 0 ? TimeSpan.FromSeconds(request.TimeoutSeconds) : TimeSpan.FromMinutes(5);
+            var result = await ExecuteCommandAsync(request.SandboxId, request.Command, timeout, context.CancellationToken);
+
+            if (result == null)
+            {
+                return new ExecuteCommandResponse
+                {
+                    Success = false,
+                    Message = "No ready agent found for sandbox or command execution failed",
+                    ExitCode = -1
+                };
+            }
+
+            return new ExecuteCommandResponse
+            {
+                Success = result.Success,
+                Message = "Command executed successfully",
+                ExitCode = result.ExitCode,
+                StandardOutput = result.StandardOutput,
+                StandardError = result.StandardError,
+                DurationMilliseconds = result.DurationMilliseconds
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error executing command for sandbox {SandboxId}", request.SandboxId);
+            return new ExecuteCommandResponse
+            {
+                Success = false,
+                Message = $"Error executing command: {ex.Message}",
+                ExitCode = -1
+            };
+        }
+    }
+
+    public override Task<IsSandboxReadyResponse> IsSandboxReady(IsSandboxReadyRequest request, ServerCallContext context)
+    {
+        _logger.LogDebug("Checking if sandbox {SandboxId} is ready", request.SandboxId);
+
+        var agent = _agents.Values.FirstOrDefault(a => a.SandboxId == request.SandboxId && a.Status == AgentStatus.AgentReady);
+        var ready = agent != null && DateTime.UtcNow - agent.LastHeartbeat < TimeSpan.FromMinutes(2);
+
+        return Task.FromResult(new IsSandboxReadyResponse
+        {
+            Ready = ready,
+            Message = ready ? "Sandbox is ready" : "Sandbox is not ready or agent is not responding"
+        });
+    }
+
     private static Microsoft.Extensions.Logging.LogLevel ConvertLogLevel(Grpc.LogLevel grpcLogLevel)
     {
         return grpcLogLevel switch
