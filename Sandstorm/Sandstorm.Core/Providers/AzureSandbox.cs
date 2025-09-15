@@ -26,6 +26,7 @@ internal class AzureSandbox : ISandbox
     private VirtualMachineResource? _virtualMachine;
     private SandboxStatus _status = SandboxStatus.Creating;
     private string? _publicIpAddress;
+    private bool _disposed = false;
 
     public AzureSandbox(SandboxConfiguration configuration, string resourceGroupName, ArmClient armClient, ILogger? logger)
     {
@@ -463,5 +464,16 @@ runcmd:
             StandardError = "",
             Duration = TimeSpan.FromSeconds(1)
         }, cancellationToken);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        await DeleteAsync();
     }
 }

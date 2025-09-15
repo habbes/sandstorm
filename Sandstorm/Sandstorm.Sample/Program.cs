@@ -1,7 +1,11 @@
 ﻿using Azure.Identity;
+using dotenv.net;
 using Microsoft.Extensions.Logging;
 using Sandstorm.Core;
 using Sandstorm.Core.Providers;
+
+
+DotEnv.Load(options: new DotEnvOptions(probeForEnv: true, probeLevelsToSearch: 3));
 
 // Example usage of the Sandstorm Cloud Sandbox Platform
 Console.WriteLine("=== Sandstorm Cloud Sandbox Platform Demo ===");
@@ -20,9 +24,13 @@ try
     Console.WriteLine("Creating sandbox client...");
     
     // Example 1: Using environment variables (like in the playground)
-    var credential = new EnvironmentCredential();
-    var subscriptionId = Environment.GetEnvironmentVariable("SUBSCRIPTION_ID") ?? "demo-subscription";
-    
+    var clientId = Environment.GetEnvironmentVariable("CLIENT_ID") ?? throw new Exception("Please set the CLIENT_ID env variable.");
+    var clientSecret = Environment.GetEnvironmentVariable("CLIENT_SECRET") ?? throw new Exception("Please set the CLIENT_SECRET env variable.");
+    var tenantId = Environment.GetEnvironmentVariable("TENANT_ID") ?? throw new Exception("Please set the TENANT_ID env variable.");
+    var subscriptionId = Environment.GetEnvironmentVariable("SUBSCRIPTION_ID") ?? throw new Exception("Please set the SUBSCRIPTION_ID env variable.");
+
+    var credential = new ClientSecretCredential(tenantId, clientId, clientSecret);
+
     // Create the Azure provider
     var azureProvider = new AzureProvider(credential, subscriptionId, logger: logger);
     
@@ -52,103 +60,42 @@ try
     Console.WriteLine($"  Region: {config.Region}");
     Console.WriteLine($"  VM Size: {config.VmSize}");
     Console.WriteLine($"  Admin Username: {config.AdminUsername}");
-    
-    // Example usage as shown in the issue:
-    Console.WriteLine("\n=== Example Usage (Simulated) ===");
-    
+
     // This would be the actual usage once credentials are configured:
-    /*
-    var sandbox = await client.Sandboxes.CreateAsync(config);
-    
+
+    await using var sandbox = await client.Sandboxes.CreateAsync(config);
+
     // Execute C# code
-    var process = await sandbox.RunCodeAsync(new CSharpCode 
-    { 
-        Code = "Console.WriteLine(\"Hello from C# in the sandbox!\");", 
-        Dependencies = new() { "Newtonsoft.Json" } 
+    var process = await sandbox.RunCodeAsync(new CSharpCode
+    {
+        Code = "Console.WriteLine(\"Hello from C# in the sandbox!\");",
+        Dependencies = new() { "Newtonsoft.Json" }
     });
-    
+
     // Get log stream
     var logs = process.GetLogStreamAsync();
-    await foreach (var log in logs)
+
+    var logCancellation = new CancellationTokenSource();
+    var logTask = Task.Run(async () =>
     {
-        Console.WriteLine($"[LOG] {log}");
-    }
-    
+        await foreach (var log in logs.WithCancellation(logCancellation.Token))
+        {
+            Console.WriteLine($"[LOG] {log}");
+        }
+    });
+
     // Execute shell command
     await sandbox.RunCommandAsync("echo 'Hello from shell!'");
-    
+
     // Run AI agent
     await sandbox.RunAgentAsync(new OpenAiAgentTask
     {
         Prompt = "Write a simple Python script that prints 'Hello World'",
         Model = "gpt-4"
     });
-    
-    // Clean up
-    await sandbox.DeleteAsync();
-    */
-    
-    Console.WriteLine("// Create sandbox");
-    Console.WriteLine("var sandbox = await client.Sandboxes.CreateAsync();");
-    Console.WriteLine();
-    
-    Console.WriteLine("// Execute C# code");
-    Console.WriteLine("var process = await sandbox.RunCodeAsync(new CSharpCode");
-    Console.WriteLine("{");
-    Console.WriteLine("    Code = \"Console.WriteLine(\\\"Hello from C#!\\\");\",");
-    Console.WriteLine("    Dependencies = new() { \"Newtonsoft.Json\" }");
-    Console.WriteLine("});");
-    Console.WriteLine();
-    
-    Console.WriteLine("// Get live log stream");
-    Console.WriteLine("var logs = process.GetLogStreamAsync();");
-    Console.WriteLine("await foreach (var log in logs)");
-    Console.WriteLine("{");
-    Console.WriteLine("    Console.WriteLine($\"[LOG] {log}\");");
-    Console.WriteLine("}");
-    Console.WriteLine();
-    
-    Console.WriteLine("// Execute shell commands");
-    Console.WriteLine("await sandbox.RunCommandAsync(\"pip install requests\");");
-    Console.WriteLine("await sandbox.RunCommandAsync(\"python --version\");");
-    Console.WriteLine();
-    
-    Console.WriteLine("// Run Python code");
-    Console.WriteLine("var pythonProcess = await sandbox.RunCodeAsync(new PythonCode");
-    Console.WriteLine("{");
-    Console.WriteLine("    Code = \"print('Hello from Python!')\",");
-    Console.WriteLine("    PipPackages = new() { \"requests\", \"numpy\" }");
-    Console.WriteLine("});");
-    Console.WriteLine();
-    
-    Console.WriteLine("// Run JavaScript code");
-    Console.WriteLine("var jsProcess = await sandbox.RunCodeAsync(new JavaScriptCode");
-    Console.WriteLine("{");
-    Console.WriteLine("    Code = \"console.log('Hello from Node.js!')\",");
-    Console.WriteLine("    NpmPackages = new() { \"lodash\", \"moment\" }");
-    Console.WriteLine("});");
-    Console.WriteLine();
-    
-    Console.WriteLine("// Run AI agent task");
-    Console.WriteLine("await sandbox.RunAgentAsync(new OpenAiAgentTask");
-    Console.WriteLine("{");
-    Console.WriteLine("    Prompt = \"Write a simple Python script that calculates fibonacci numbers\",");
-    Console.WriteLine("    Model = \"gpt-4\"");
-    Console.WriteLine("});");
-    Console.WriteLine();
-    
-    Console.WriteLine("// Clean up resources");
-    Console.WriteLine("await sandbox.DeleteAsync();");
-    
-    Console.WriteLine("\n=== Features ===");
-    Console.WriteLine("✓ Fast sandbox provisioning (target < 20 seconds)");
-    Console.WriteLine("✓ Multi-language support (C#, Python, JavaScript)");
-    Console.WriteLine("✓ Shell command execution");
-    Console.WriteLine("✓ AI agent integration");
-    Console.WriteLine("✓ Live log streaming");
-    Console.WriteLine("✓ Automatic resource cleanup");
-    Console.WriteLine("✓ Azure cloud integration");
-    Console.WriteLine("✓ Configurable VM sizes and regions");
+
+    logCancellation.Cancel();
+    await logTask;
 }
 catch (Exception ex)
 {

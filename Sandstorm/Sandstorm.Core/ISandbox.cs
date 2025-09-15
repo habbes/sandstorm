@@ -3,7 +3,7 @@ namespace Sandstorm.Core;
 /// <summary>
 /// Represents a sandbox environment for executing code and commands
 /// </summary>
-public interface ISandbox
+public interface ISandbox : IAsyncDisposable
 {
     /// <summary>
     /// The unique identifier for this sandbox
