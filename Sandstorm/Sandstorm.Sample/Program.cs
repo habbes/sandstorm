@@ -37,32 +37,61 @@ try
     // Create the Sandstorm client
     var client = new SandstormClient(azureProvider);
     
-    // Example 2: Create a sandbox with custom configuration
-    Console.WriteLine("Creating sandbox with custom configuration...");
+    // Example 2: Create a sandbox with orchestrator-agent architecture
+    Console.WriteLine("Creating sandbox with orchestrator-agent architecture...");
     
     var config = new SandboxConfiguration
     {
         Name = "demo-sandbox",
         Region = "westus2",
         VmSize = "Standard_B2s",
+        // Configure orchestrator endpoint for agent communication
+        OrchestratorEndpoint = "http://localhost:5000", // Default value
         Tags = 
         {
             ["Environment"] = "Demo",
-            ["Purpose"] = "Code execution",
+            ["Purpose"] = "Code execution with orchestrator-agent architecture",
             ["Owner"] = "SandstormDemo"
         }
     };
     
-    // Note: In this demo, we won't actually create Azure resources
-    // as that requires valid credentials and will incur costs
-    Console.WriteLine("Would create sandbox with configuration:");
+    Console.WriteLine("Sandbox configuration (Orchestrator-Agent Architecture):");
     Console.WriteLine($"  Name: {config.Name}");
     Console.WriteLine($"  Region: {config.Region}");
     Console.WriteLine($"  VM Size: {config.VmSize}");
     Console.WriteLine($"  Admin Username: {config.AdminUsername}");
+    Console.WriteLine($"  Orchestrator Endpoint: {config.OrchestratorEndpoint}");
+    Console.WriteLine($"  Architecture: Agent-based (no SSH required)");
+    Console.WriteLine();
+    
+    Console.WriteLine("Key advantages of the new architecture:");
+    Console.WriteLine("✓ No direct SSH connections required");
+    Console.WriteLine("✓ No public IP addresses needed for VMs");
+    Console.WriteLine("✓ Agent initiates connection to orchestrator (more secure)");
+    Console.WriteLine("✓ Centralized command execution and logging");
+    Console.WriteLine("✓ Automatic agent installation via cloud-init");
+    Console.WriteLine();
 
-    // This would be the actual usage once credentials are configured:
+    // Note: In this demo, we won't actually create Azure resources
+    // as that requires valid credentials and will incur costs
+    // But we can demonstrate the orchestrator client directly
+    
+    Console.WriteLine("Demonstrating orchestrator client (simulated):");
+    using var orchestratorClient = new Sandstorm.Core.Services.OrchestratorClient("http://localhost:5000");
+    
+    var demoResult = await orchestratorClient.ExecuteCommandAsync("demo-sandbox", "echo 'Hello from orchestrator!'", TimeSpan.FromMinutes(1));
+    Console.WriteLine($"Command execution result:");
+    Console.WriteLine($"  Exit Code: {demoResult.ExitCode}");
+    Console.WriteLine($"  Output: {demoResult.StandardOutput}");
+    Console.WriteLine($"  Duration: {demoResult.Duration.TotalMilliseconds}ms");
+    Console.WriteLine();
 
+    // This would be the actual usage once orchestrator and credentials are configured:
+    // await using var sandbox = await client.Sandboxes.CreateAsync(config);
+
+    /*
+    // Code execution examples (would work with real orchestrator):
+    
     await using var sandbox = await client.Sandboxes.CreateAsync(config);
 
     // Execute C# code
@@ -71,7 +100,6 @@ try
         Code = "Console.WriteLine(\"Hello from C# in the sandbox!\");",
         Dependencies = new() { "Newtonsoft.Json" }
     });
-
 
     var logs = process.GetLogStreamAsync();
 
@@ -96,12 +124,17 @@ try
 
     logCancellation.Cancel();
     await logTask;
+    */
 }
 catch (Exception ex)
 {
     Console.WriteLine($"Error: {ex.Message}");
-    Console.WriteLine("Note: This demo requires valid Azure credentials to create actual sandboxes.");
-    Console.WriteLine("Set environment variables: CLIENT_ID, CLIENT_SECRET, TENANT_ID, SUBSCRIPTION_ID");
+    Console.WriteLine();
+    Console.WriteLine("Note: This demo shows the new orchestrator-agent architecture.");
+    Console.WriteLine("To use with real Azure resources:");
+    Console.WriteLine("1. Set environment variables: CLIENT_ID, CLIENT_SECRET, TENANT_ID, SUBSCRIPTION_ID");
+    Console.WriteLine("2. Deploy and run the Sandstorm.Orchestrator service");
+    Console.WriteLine("3. Configure the orchestrator endpoint in your sandbox configuration");
 }
 
 Console.WriteLine("\nDemo completed. Press any key to exit...");
