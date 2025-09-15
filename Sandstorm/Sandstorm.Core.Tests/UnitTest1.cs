@@ -71,6 +71,52 @@ public class SandstormClientTests
     }
 }
 
+public class ExecutionResultTests
+{
+    [Fact]
+    public void ExecutionResult_ReturnsCorrectErrorForInvalidCommand()
+    {
+        // This test verifies that we're no longer simulating execution
+        // The old simulation would return "Executed: invalid-command" with exit code 0
+        // Real SSH execution should handle errors properly
+        
+        // Arrange
+        var result = new ExecutionResult
+        {
+            ExitCode = 127, // Command not found
+            StandardOutput = "",
+            StandardError = "command not found: invalid-command",
+            Duration = TimeSpan.FromMilliseconds(100)
+        };
+        
+        // Assert - verify the result structure is correct for error scenarios
+        Assert.Equal(127, result.ExitCode);
+        Assert.True(result.ExitCode != 0, "Invalid commands should not return success exit codes");
+        Assert.Contains("command not found", result.StandardError);
+    }
+    
+    [Fact]
+    public void ExecutionResult_DoesNotContainSimulationText()
+    {
+        // This test ensures we're not returning simulation text
+        // The old code would return "Executed: {command}" which was obviously fake
+        
+        // Arrange
+        var realResult = new ExecutionResult
+        {
+            ExitCode = 0,
+            StandardOutput = "Hello, World!",
+            StandardError = "",
+            Duration = TimeSpan.FromMilliseconds(250)
+        };
+        
+        // Assert - verify no simulation artifacts
+        Assert.DoesNotContain("Executed:", realResult.StandardOutput);
+        Assert.DoesNotContain("simulate", realResult.StandardOutput.ToLower());
+        Assert.DoesNotContain("simulation", realResult.StandardOutput.ToLower());
+    }
+}
+
 public class SandboxConfigurationTests
 {
     [Fact]

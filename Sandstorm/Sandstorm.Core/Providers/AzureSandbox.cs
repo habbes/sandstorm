@@ -8,6 +8,7 @@ using Azure.ResourceManager.Resources;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 using System.Text;
+using Renci.SshNet;
 
 namespace Sandstorm.Core.Providers;
 
@@ -453,17 +454,61 @@ runcmd:
         return script.ToString();
     }
 
-    internal Task<ExecutionResult> ExecuteCommandAsync(string command, CancellationToken cancellationToken)
+    internal async Task<ExecutionResult> ExecuteCommandAsync(string command, CancellationToken cancellationToken)
     {
-        // This would implement SSH/remote execution to the VM
-        // For now, simulate execution with a delay
-        return Task.Delay(1000, cancellationToken).ContinueWith(_ => new ExecutionResult
+        if (string.IsNullOrWhiteSpace(command))
+            throw new ArgumentException("Command cannot be null or empty", nameof(command));
+
+        if (_publicIpAddress == null)
+            throw new InvalidOperationException("VM not ready - no public IP address available");
+
+        var startTime = DateTime.UtcNow;
+        
+        try
         {
-            ExitCode = 0,
-            StandardOutput = $"Executed: {command}",
-            StandardError = "",
-            Duration = TimeSpan.FromSeconds(1)
-        }, cancellationToken);
+            _logger?.LogDebug("Executing command on VM {PublicIpAddress}: {Command}", _publicIpAddress, command);
+
+            using var client = new SshClient(_publicIpAddress, _configuration.AdminUsername, _configuration.AdminPassword);
+            
+            // Set connection timeout
+            client.ConnectionInfo.Timeout = TimeSpan.FromSeconds(30);
+            
+            await Task.Run(() => client.Connect(), cancellationToken);
+            
+            if (!client.IsConnected)
+            {
+                throw new InvalidOperationException("Failed to establish SSH connection to VM");
+            }
+
+            using var sshCommand = client.CreateCommand(command);
+            var result = await Task.Run(() => sshCommand.Execute(), cancellationToken);
+            
+            var duration = DateTime.UtcNow - startTime;
+            
+            _logger?.LogDebug("Command completed with exit code {ExitCode} in {Duration}ms", 
+                sshCommand.ExitStatus ?? -1, duration.TotalMilliseconds);
+
+            return new ExecutionResult
+            {
+                ExitCode = sshCommand.ExitStatus ?? -1,
+                StandardOutput = result,
+                StandardError = sshCommand.Error,
+                Duration = duration
+            };
+        }
+        catch (Exception ex) when (!(ex is OperationCanceledException))
+        {
+            _logger?.LogError(ex, "Failed to execute command on VM {PublicIpAddress}: {Command}", _publicIpAddress, command);
+            
+            var duration = DateTime.UtcNow - startTime;
+            return new ExecutionResult
+            {
+                ExitCode = -1,
+                StandardOutput = "",
+                StandardError = $"SSH execution failed: {ex.Message}",
+                Duration = duration
+            };
+        }
     }
 
     public async ValueTask DisposeAsync()
