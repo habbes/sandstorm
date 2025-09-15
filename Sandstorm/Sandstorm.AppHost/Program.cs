@@ -54,6 +54,13 @@ public class LocalOrchestrationService : BackgroundService
 
             _logger.LogInformation("✅ Orchestrator running on http://localhost:5000");
 
+            // Wait a bit more to ensure gRPC is ready and test connectivity
+            _logger.LogInformation("⏳ Waiting for orchestrator gRPC service to be ready...");
+            await Task.Delay(2000, stoppingToken);
+            
+            // Test orchestrator connectivity
+            await WaitForOrchestratorReady(stoppingToken);
+
             // Start agent service
             _logger.LogInformation("🤖 Starting agent service...");
             var agentProcess = StartProject("Sandstorm.Agent", 
@@ -153,10 +160,10 @@ public class LocalOrchestrationService : BackgroundService
 
         var process = new Process { StartInfo = processInfo };
         
-        // Log output from the process
+        // Log important output from the process, filtering out build warnings
         process.OutputDataReceived += (sender, e) =>
         {
-            if (!string.IsNullOrEmpty(e.Data))
+            if (!string.IsNullOrEmpty(e.Data) && !e.Data.Contains("warning CS"))
             {
                 _logger.LogInformation("[{ProjectName}] {Data}", projectName, e.Data);
             }
@@ -164,7 +171,7 @@ public class LocalOrchestrationService : BackgroundService
         
         process.ErrorDataReceived += (sender, e) =>
         {
-            if (!string.IsNullOrEmpty(e.Data))
+            if (!string.IsNullOrEmpty(e.Data) && !e.Data.Contains("warning CS"))
             {
                 _logger.LogError("[{ProjectName}] {Data}", projectName, e.Data);
             }
@@ -175,5 +182,39 @@ public class LocalOrchestrationService : BackgroundService
         process.BeginErrorReadLine();
 
         return process;
+    }
+
+    private async Task WaitForOrchestratorReady(CancellationToken cancellationToken)
+    {
+        const int maxRetries = 10;
+        const int delayMs = 1000;
+
+        for (int i = 0; i < maxRetries; i++)
+        {
+            try
+            {
+                using var httpClient = new HttpClient();
+                httpClient.Timeout = TimeSpan.FromSeconds(5);
+                
+                var response = await httpClient.GetAsync("http://localhost:5000", cancellationToken);
+                if (response.IsSuccessStatusCode)
+                {
+                    _logger.LogInformation("✅ Orchestrator gRPC service is ready");
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug("Orchestrator not ready yet (attempt {Attempt}/{MaxRetries}): {Error}", 
+                    i + 1, maxRetries, ex.Message);
+            }
+
+            if (i < maxRetries - 1)
+            {
+                await Task.Delay(delayMs, cancellationToken);
+            }
+        }
+
+        _logger.LogWarning("⚠️ Orchestrator may not be fully ready, but proceeding with agent startup");
     }
 }
