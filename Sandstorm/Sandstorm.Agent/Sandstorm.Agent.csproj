@@ -6,6 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>dotnet-Sandstorm.Agent-20241215</UserSecretsId>
     <OutputType>Exe</OutputType>
+    <PublishAot>true</PublishAot>
   </PropertyGroup>
 
   <ItemGroup>

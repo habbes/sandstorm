@@ -295,14 +295,11 @@ write_files:
       git clone https://github.com/habbes/sandstorm.git
       cd sandstorm/Sandstorm
       
-      # Build the agent as a self-contained binary for Linux
+      # Build the agent as AOT binary for Linux
       $HOME/.dotnet/dotnet publish Sandstorm.Agent/Sandstorm.Agent.csproj \
           -c Release \
           -o /opt/sandstorm/agent \
-          --self-contained true \
-          -r linux-x64 \
-          -p:PublishSingleFile=true \
-          -p:IncludeNativeLibrariesForSelfExtract=true
+          -r linux-x64
       
       # Create wrapper script for the service
       cat > /opt/sandstorm/agent/run-agent.sh << 'AGENT_EOF'
