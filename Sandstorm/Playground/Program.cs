@@ -39,21 +39,34 @@ Console.WriteLine("--------Start create group--------");
 var resourceGroupName = "SandstormTestRG";
 String location = AzureLocation.WestUS2;
 
-ResourceGroupResource resourceGroup = (await client.GetDefaultSubscription().GetResourceGroups().CreateOrUpdateAsync(Azure.WaitUntil.Completed, resourceGroupName, new ResourceGroupData(location))).Value;
-Console.WriteLine("--------Finish create group--------");
-Console.WriteLine($"Finished resource group creation after {sw.ElapsedMilliseconds} ms");
+ResourceGroupResource? resourceGroup = null;
 
-// Create a Virtual Machine
-await CreateVmAsync(resourceGroup, resourceGroupName, location, "quickstartvm", AdminUsername, AdminPassword);
+try
+{
+    resourceGroup = (await client.GetDefaultSubscription().GetResourceGroups().CreateOrUpdateAsync(Azure.WaitUntil.Completed, resourceGroupName, new ResourceGroupData(location))).Value;
+    Console.WriteLine("--------Finish create group--------");
+    Console.WriteLine($"Finished resource group creation after {sw.ElapsedMilliseconds} ms");
 
-Console.WriteLine($"Finished VM creation after {sw.ElapsedMilliseconds} ms");
+    // Create a Virtual Machine
+    await CreateVmAsync(resourceGroup, resourceGroupName, location, "quickstartvm", AdminUsername, AdminPassword);
 
-Console.WriteLine("Prease any key to delete the resource group");
-Console.ReadKey();
+    Console.WriteLine($"Finished VM creation after {sw.ElapsedMilliseconds} ms");
 
-sw.Restart();
-await resourceGroup.DeleteAsync(Azure.WaitUntil.Completed);
-Console.WriteLine($"Finished resource group deletion after {sw.ElapsedMilliseconds} ms");
+    Console.WriteLine("Prease any key to delete the resource group");
+    Console.ReadKey();
+
+}
+finally
+{
+    if (resourceGroup != null)
+    {
+        sw = Stopwatch.StartNew();
+        Console.WriteLine("Deleting resources...");
+        await resourceGroup.DeleteAsync(Azure.WaitUntil.Completed);
+        Console.WriteLine($"Finished resource group deletion after {sw.ElapsedMilliseconds} ms");
+    }
+}
+
 
 
 static async Task CreateVmAsync(
@@ -75,9 +88,11 @@ static async Task CreateVmAsync(
         Subnets = { new SubnetData() { Name = "SubnetSampleName", AddressPrefix = "10.0.0.0/28" } }
     };
 
+    var sw = Stopwatch.StartNew();
     var vnetCollection = resourcegroup.GetVirtualNetworks();
     var vnet = (await vnetCollection.CreateOrUpdateAsync(Azure.WaitUntil.Completed, "SampleVNet", vnetData)).Value;
     Console.WriteLine("--------Done create VNet--------");
+    Console.WriteLine($"Created vnet after {sw.ElapsedMilliseconds} ms");
 
     // Create Network Interface
     Console.WriteLine("--------Start create Network Interface--------");
@@ -99,6 +114,7 @@ static async Task CreateVmAsync(
     };
     var nicCollection = resourcegroup.GetNetworkInterfaces();
     var nic = (await nicCollection.CreateOrUpdateAsync(Azure.WaitUntil.Completed, "SampleNicName", nicData)).Value;
+    Console.WriteLine($"Created nic after {sw.ElapsedMilliseconds} ms");    
 
     // Create VM
     Console.WriteLine("--------Start create VM--------");
@@ -115,7 +131,8 @@ static async Task CreateVmAsync(
             ComputerName = "linux Compute",
             LinuxConfiguration = new LinuxConfiguration()
             {
-                DisablePasswordAuthentication = true,
+                DisablePasswordAuthentication = false,
+                ProvisionVmAgent = true,
             }
         },
         NetworkProfile = new VirtualMachineNetworkProfile()
@@ -133,8 +150,8 @@ static async Task CreateVmAsync(
         {
             OSDisk = new VirtualMachineOSDisk(DiskCreateOptionType.FromImage)
             {
-                Name = "Sample",
-                OSType = SupportedOperatingSystemType.Windows,
+                Name = "NewVm",
+                OSType = SupportedOperatingSystemType.Linux,
                 Caching = CachingType.ReadWrite,
                 ManagedDisk = new VirtualMachineManagedDisk()
                 {
@@ -163,9 +180,9 @@ static async Task CreateVmAsync(
                         },
             ImageReference = new ImageReference()
             {
-                Publisher = "MicrosoftWindowsServer",
-                Offer = "WindowsServer",
-                Sku = "2016-Datacenter",
+                Publisher = "Canonical",
+                Offer = "UbuntuServer",
+                Sku = "18.04-LTS",
                 Version = "latest",
             }
         }
@@ -174,4 +191,5 @@ static async Task CreateVmAsync(
     var resource = await collection.CreateOrUpdateAsync(Azure.WaitUntil.Completed, vmName, vmData);
     Console.WriteLine("VM ID: " + resource.Id);
     Console.WriteLine("--------Done create VM--------");
+    Console.WriteLine($"Created VM after {sw.ElapsedMilliseconds} ms");
 }
