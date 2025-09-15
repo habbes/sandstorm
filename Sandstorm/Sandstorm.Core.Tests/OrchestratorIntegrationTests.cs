@@ -2,6 +2,7 @@ using Xunit;
 using Sandstorm.Core;
 using Sandstorm.Core.Services;
 using Microsoft.Extensions.Logging;
+using Moq;
 
 namespace Sandstorm.Core.Tests;
 
@@ -45,26 +46,29 @@ public class OrchestratorIntegrationTests
     }
 
     [Fact]
-    public void SandboxConfiguration_OrchestratorEndpoint_HasDefaultValue()
+    public void SandstormClient_HasOrchestratorEndpoint()
     {
-        // Arrange & Act
-        var config = new SandboxConfiguration();
+        // Arrange
+        var mockProvider = new Mock<ICloudProvider>();
+        
+        // Act
+        var client = new SandstormClient(mockProvider.Object);
         
         // Assert
-        Assert.Equal("http://localhost:5000", config.OrchestratorEndpoint);
+        Assert.Equal("http://localhost:5000", client.OrchestratorEndpoint);
     }
 
     [Fact]
-    public void SandboxConfiguration_OrchestratorEndpoint_CanBeSet()
+    public void SandstormClient_OrchestratorEndpoint_CanBeCustomized()
     {
         // Arrange
-        var config = new SandboxConfiguration();
+        var mockProvider = new Mock<ICloudProvider>();
         var customEndpoint = "https://orchestrator.example.com";
         
         // Act
-        config.OrchestratorEndpoint = customEndpoint;
+        var client = new SandstormClient(mockProvider.Object, customEndpoint);
         
         // Assert
-        Assert.Equal(customEndpoint, config.OrchestratorEndpoint);
+        Assert.Equal(customEndpoint, client.OrchestratorEndpoint);
     }
 }

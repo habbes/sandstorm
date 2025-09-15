@@ -45,11 +45,6 @@ public class SandboxConfiguration
     /// </summary>
     public TimeSpan? AutoDeleteAfter { get; set; }
 
-    /// <summary>
-    /// The orchestrator endpoint for agent communication (if null, uses direct SSH)
-    /// </summary>
-    public string? OrchestratorEndpoint { get; set; } = "http://localhost:5000";
-
     private static string GenerateRandomPassword()
     {
         // Generate a random password that meets Azure VM requirements

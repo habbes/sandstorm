@@ -45,8 +45,6 @@ try
         Name = "demo-sandbox",
         Region = "westus2",
         VmSize = "Standard_B2s",
-        // Configure orchestrator endpoint for agent communication
-        OrchestratorEndpoint = "http://localhost:5000", // Default value
         Tags = 
         {
             ["Environment"] = "Demo",
@@ -55,12 +53,16 @@ try
         }
     };
     
+    // Create client with custom orchestrator endpoint
+    var orchestratorEndpoint = "http://localhost:5000";
+    var clientWithOrchestrator = new SandstormClient(azureProvider, orchestratorEndpoint);
+    
     Console.WriteLine("Sandbox configuration (Orchestrator-Agent Architecture):");
     Console.WriteLine($"  Name: {config.Name}");
     Console.WriteLine($"  Region: {config.Region}");
     Console.WriteLine($"  VM Size: {config.VmSize}");
     Console.WriteLine($"  Admin Username: {config.AdminUsername}");
-    Console.WriteLine($"  Orchestrator Endpoint: {config.OrchestratorEndpoint}");
+    Console.WriteLine($"  Orchestrator Endpoint: {clientWithOrchestrator.OrchestratorEndpoint}");
     Console.WriteLine($"  Architecture: Agent-based (no SSH required)");
     Console.WriteLine();
     

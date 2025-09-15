@@ -11,9 +11,10 @@ public interface ICloudProvider
     /// Creates a new virtual machine instance for a sandbox
     /// </summary>
     /// <param name="config">Configuration for the sandbox VM</param>
+    /// <param name="orchestratorEndpoint">The orchestrator endpoint for agent communication</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>The created sandbox instance</returns>
-    Task<ISandbox> CreateSandboxAsync(SandboxConfiguration config, CancellationToken cancellationToken = default);
+    Task<ISandbox> CreateSandboxAsync(SandboxConfiguration config, string orchestratorEndpoint, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Gets an existing sandbox by its identifier

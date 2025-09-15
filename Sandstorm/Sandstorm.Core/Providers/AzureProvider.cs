@@ -51,12 +51,12 @@ public class AzureProvider : ICloudProvider
     {
     }
 
-    public async Task<ISandbox> CreateSandboxAsync(SandboxConfiguration config, CancellationToken cancellationToken = default)
+    public async Task<ISandbox> CreateSandboxAsync(SandboxConfiguration config, string orchestratorEndpoint, CancellationToken cancellationToken = default)
     {
         _logger?.LogInformation("Creating Azure sandbox: {SandboxName}", config.Name);
 
         var resourceGroupName = config.ResourceGroupName ?? $"rg-{config.Name}";
-        var sandbox = new AzureSandbox(config, resourceGroupName, _armClient, _logger);
+        var sandbox = new AzureSandbox(config, resourceGroupName, orchestratorEndpoint, _armClient, _logger);
 
         _sandboxes[sandbox.SandboxId] = sandbox;
 

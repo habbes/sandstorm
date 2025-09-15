@@ -19,6 +19,7 @@ internal class AzureSandbox : ISandbox
 {
     private readonly SandboxConfiguration _configuration;
     private readonly string _resourceGroupName;
+    private readonly string _orchestratorEndpoint;
     private readonly ArmClient _armClient;
     private readonly ILogger? _logger;
     private readonly string _sandboxId;
@@ -30,19 +31,17 @@ internal class AzureSandbox : ISandbox
     private OrchestratorClient? _orchestratorClient;
     private bool _disposed = false;
 
-    public AzureSandbox(SandboxConfiguration configuration, string resourceGroupName, ArmClient armClient, ILogger? logger)
+    public AzureSandbox(SandboxConfiguration configuration, string resourceGroupName, string orchestratorEndpoint, ArmClient armClient, ILogger? logger)
     {
         _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         _resourceGroupName = resourceGroupName ?? throw new ArgumentNullException(nameof(resourceGroupName));
+        _orchestratorEndpoint = orchestratorEndpoint ?? throw new ArgumentNullException(nameof(orchestratorEndpoint));
         _armClient = armClient ?? throw new ArgumentNullException(nameof(armClient));
         _logger = logger;
         _sandboxId = $"sandbox-{Guid.NewGuid():N}";
         
-        // Initialize orchestrator client if endpoint is configured
-        if (!string.IsNullOrEmpty(_configuration.OrchestratorEndpoint))
-        {
-            _orchestratorClient = new OrchestratorClient(_configuration.OrchestratorEndpoint, _logger);
-        }
+        // Initialize orchestrator client
+        _orchestratorClient = new OrchestratorClient(_orchestratorEndpoint, _logger);
     }
 
     public string SandboxId => _sandboxId;
@@ -242,9 +241,7 @@ internal class AzureSandbox : ISandbox
     }
 
     private string GenerateCloudInitScript()
-    {
-        var orchestratorEndpoint = _configuration.OrchestratorEndpoint ?? "http://localhost:5000";
-        
+    {        
         return $@"#cloud-config
 package_update: true
 package_upgrade: true
@@ -265,7 +262,7 @@ write_files:
     content: |
       SANDSTORM_SANDBOX_ID={_sandboxId}
       SANDSTORM_VM_ID={Environment.MachineName}
-      SANDSTORM_ORCHESTRATOR_ENDPOINT={orchestratorEndpoint}
+      SANDSTORM_ORCHESTRATOR_ENDPOINT={_orchestratorEndpoint}
     append: true
   - path: /opt/sandstorm/install-agent.sh
     permissions: '0755'
