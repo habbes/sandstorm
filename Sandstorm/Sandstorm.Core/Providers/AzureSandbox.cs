@@ -389,6 +389,7 @@ runcmd:
 
     public async Task WaitForReadyAsync(CancellationToken cancellationToken = default)
     {
+        // First wait for VM to be ready
         while (_status != SandboxStatus.Ready && _status != SandboxStatus.Error)
         {
             if (cancellationToken.IsCancellationRequested)
@@ -400,6 +401,44 @@ runcmd:
         if (_status == SandboxStatus.Error)
         {
             throw new InvalidOperationException("Sandbox failed to start");
+        }
+
+        // Then wait for agent to be connected to orchestrator
+        if (_orchestratorClient != null)
+        {
+            _logger?.LogInformation("Waiting for agent to connect to orchestrator for sandbox {SandboxId}", _sandboxId);
+            
+            var timeout = DateTime.UtcNow.AddMinutes(5); // 5 minute timeout for agent connectivity
+            bool agentReady = false;
+            
+            while (!agentReady && DateTime.UtcNow < timeout)
+            {
+                if (cancellationToken.IsCancellationRequested)
+                    throw new OperationCanceledException();
+
+                try
+                {
+                    agentReady = await _orchestratorClient.IsSandboxReadyAsync(_sandboxId, cancellationToken);
+                    if (!agentReady)
+                    {
+                        _logger?.LogDebug("Agent not yet ready for sandbox {SandboxId}, waiting...", _sandboxId);
+                        await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogDebug("Error checking agent readiness for sandbox {SandboxId}: {Error}", _sandboxId, ex.Message);
+                    await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
+                }
+            }
+            
+            if (!agentReady)
+            {
+                _logger?.LogWarning("Agent failed to connect to orchestrator within timeout for sandbox {SandboxId}", _sandboxId);
+                throw new TimeoutException($"Agent failed to connect to orchestrator within 5 minutes for sandbox {_sandboxId}");
+            }
+            
+            _logger?.LogInformation("Agent successfully connected to orchestrator for sandbox {SandboxId}", _sandboxId);
         }
     }
 
