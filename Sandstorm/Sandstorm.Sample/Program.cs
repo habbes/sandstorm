@@ -72,7 +72,7 @@ try
         Dependencies = new() { "Newtonsoft.Json" }
     });
 
-    // Get log stream
+
     var logs = process.GetLogStreamAsync();
 
     var logCancellation = new CancellationTokenSource();

@@ -95,7 +95,6 @@ internal class SandboxProcess : IProcess
             AddLogLine($"Starting execution of process {_processId}");
             AddLogLine($"Command: {_command}");
             
-            // Execute the command on the sandbox
             _result = await _sandbox.ExecuteCommandAsync(_command, _cancellationTokenSource.Token);
             
             AddLogLine($"Process completed with exit code: {_result.ExitCode}");
