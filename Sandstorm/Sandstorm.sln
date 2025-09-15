@@ -15,6 +15,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Sandstorm.Orchestrator", "S
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Sandstorm.Agent", "Sandstorm.Agent\Sandstorm.Agent.csproj", "{A1B2C3D4-E5F6-A7B8-C9D0-E1F2A3B4C5D6}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Sandstorm.AppHost", "Sandstorm.AppHost\Sandstorm.AppHost.csproj", "{B559F351-1524-4092-996D-D010F9C716F0}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -45,6 +47,10 @@ Global
 		{A1B2C3D4-E5F6-A7B8-C9D0-E1F2A3B4C5D6}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A1B2C3D4-E5F6-A7B8-C9D0-E1F2A3B4C5D6}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A1B2C3D4-E5F6-A7B8-C9D0-E1F2A3B4C5D6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B559F351-1524-4092-996D-D010F9C716F0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B559F351-1524-4092-996D-D010F9C716F0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B559F351-1524-4092-996D-D010F9C716F0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B559F351-1524-4092-996D-D010F9C716F0}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

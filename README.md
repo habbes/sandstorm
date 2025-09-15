@@ -99,6 +99,22 @@ var sandbox = await client.Sandboxes.CreateAsync(config);
 
 See the `Sandstorm.Sample` project for complete usage examples.
 
+## Local Development
+
+For local development and testing, use the provided AppHost which orchestrates all services:
+
+```bash
+cd Sandstorm/Sandstorm.AppHost
+dotnet run
+```
+
+This starts:
+- **Orchestrator** service on `http://localhost:5000` 
+- **Agent** service with proper configuration
+- **Sample** application demonstrating SDK usage
+
+All services run with coordinated logging and graceful shutdown. See `Sandstorm.AppHost/README.md` for details.
+
 ## Architecture
 
 The library consists of:
