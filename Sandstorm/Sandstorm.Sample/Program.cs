@@ -9,43 +9,50 @@ using Sandstorm.Core.Providers;
 Console.WriteLine("=== Sandstorm Cloud Sandbox Platform Demo ===");
 Console.WriteLine();
 
-// Demonstrate the key achievement: Real orchestrator communication
-Console.WriteLine("🎯 KEY ACHIEVEMENT: Real Command Execution (No Simulation)");
-Console.WriteLine("=========================================================");
+// Load environment variables from .env file if present
+DotEnv.Load();
+
+Console.WriteLine("🎯 END-TO-END SANDBOX PROVISIONING DEMO");
+Console.WriteLine("=======================================");
 Console.WriteLine();
 
 try
 {
-    Console.WriteLine("Creating orchestrator client...");
+    // Create Azure provider and SandstormClient - the ONLY interface the sample should use
+    Console.WriteLine("Initializing Sandstorm client...");
     
-    // This now creates a REAL gRPC client, not a simulation
-    using var orchestratorClient = new Sandstorm.Core.Services.OrchestratorClient("http://localhost:5000");
+    // Use environment variables for Azure credentials - REAL credentials required
+    var tenantId = Environment.GetEnvironmentVariable("AZURE_TENANT_ID");
+    var clientId = Environment.GetEnvironmentVariable("AZURE_CLIENT_ID");
+    var clientSecret = Environment.GetEnvironmentVariable("AZURE_CLIENT_SECRET");
+    var subscriptionId = Environment.GetEnvironmentVariable("AZURE_SUBSCRIPTION_ID");
     
-    Console.WriteLine("Testing real gRPC communication with orchestrator...");
+    // Validate that all required Azure credentials are provided
+    if (string.IsNullOrEmpty(tenantId) || string.IsNullOrEmpty(clientId) || 
+        string.IsNullOrEmpty(clientSecret) || string.IsNullOrEmpty(subscriptionId))
+    {
+        throw new InvalidOperationException(
+            "Azure credentials are required for real end-to-end provisioning. " +
+            "Please set the following environment variables:\n" +
+            "- AZURE_TENANT_ID\n" +
+            "- AZURE_CLIENT_ID\n" +
+            "- AZURE_CLIENT_SECRET\n" +
+            "- AZURE_SUBSCRIPTION_ID");
+    }
     
-    // These are now REAL gRPC calls to the orchestrator service, not simulations!
-    var demoResult = await orchestratorClient.ExecuteCommandAsync("demo-sandbox", "echo 'Hello from orchestrator!'", TimeSpan.FromMinutes(1));
-    Console.WriteLine($"Real gRPC command execution result:");
-    Console.WriteLine($"  Exit Code: {demoResult.ExitCode}");
-    Console.WriteLine($"  Output: {demoResult.StandardOutput}");
-    Console.WriteLine($"  Error: {demoResult.StandardError}");
-    Console.WriteLine($"  Duration: {demoResult.Duration.TotalMilliseconds}ms");
+    // Create the real Azure cloud provider - NO MOCKING
+    Console.WriteLine("🔧 Using real Azure provider");
+    var cloudProvider = new AzureProvider(tenantId, clientId, clientSecret, subscriptionId);
+    
+    // Create the SandstormClient - this is the ONLY interface the sample should use
+    var client = new SandstormClient(cloudProvider, "http://localhost:5000");
+    
+    Console.WriteLine("✅ Sandstorm client initialized");
+    Console.WriteLine($"   Orchestrator endpoint: {client.OrchestratorEndpoint}");
     Console.WriteLine();
     
-    if (demoResult.ExitCode == -1 && string.IsNullOrEmpty(demoResult.StandardOutput))
-    {
-        Console.WriteLine("✅ SUCCESS: Real gRPC communication established!");
-        Console.WriteLine("   The orchestrator service received and processed the command request.");
-        Console.WriteLine("   (Agent lifecycle management optimization in progress for full execution)");
-    }
-    else
-    {
-        Console.WriteLine("🎉 COMPLETE SUCCESS: Real command executed!");
-    }
-    Console.WriteLine();
-    
-    // Example 2: Create a sandbox with orchestrator-agent architecture
-    Console.WriteLine("Sandbox configuration (Orchestrator-Agent Architecture):");
+    // Create sandbox configuration
+    Console.WriteLine("📋 Configuring sandbox...");
     var config = new SandboxConfiguration
     {
         Name = "demo-sandbox",
@@ -54,36 +61,81 @@ try
         Tags = 
         {
             ["Environment"] = "Demo",
-            ["Purpose"] = "Real code execution with orchestrator-agent architecture",
+            ["Purpose"] = "End-to-end sandbox provisioning demo",
             ["Owner"] = "SandstormDemo"
         }
     };
     
-    Console.WriteLine($"  Name: {config.Name}");
-    Console.WriteLine($"  Region: {config.Region}");
-    Console.WriteLine($"  VM Size: {config.VmSize}");
-    Console.WriteLine($"  Admin Username: {config.AdminUsername}");
-    Console.WriteLine($"  Orchestrator Endpoint: http://localhost:5000");
-    Console.WriteLine($"  Architecture: Agent-based (no SSH required)");
+    Console.WriteLine($"   Name: {config.Name}");
+    Console.WriteLine($"   Region: {config.Region}");
+    Console.WriteLine($"   VM Size: {config.VmSize}");
+    Console.WriteLine($"   Admin Username: {config.AdminUsername}");
     Console.WriteLine();
     
-    Console.WriteLine("Key advantages of the new architecture:");
-    Console.WriteLine("✓ No direct SSH connections required");
-    Console.WriteLine("✓ No public IP addresses needed for VMs");
-    Console.WriteLine("✓ Agent initiates connection to orchestrator (more secure)");
-    Console.WriteLine("✓ Centralized command execution and logging");
-    Console.WriteLine("✓ Automatic agent installation via cloud-init");
-    Console.WriteLine("✓ REAL command execution (no simulation)");
+    // Create the sandbox - this will provision VM and install agent
+    Console.WriteLine("🚀 Creating sandbox (this will provision VM and install agent)...");
+    var sandbox = await client.Sandboxes.CreateAsync(config);
+    
+    Console.WriteLine($"✅ Sandbox created successfully!");
+    Console.WriteLine($"   Sandbox ID: {sandbox.SandboxId}");
+    Console.WriteLine($"   Status: {sandbox.Status}");
+    Console.WriteLine($"   Public IP: {sandbox.PublicIpAddress}");
     Console.WriteLine();
+    
+    // Wait for the sandbox to be ready (agent connected)
+    Console.WriteLine("⏳ Waiting for sandbox to be ready (agent to connect)...");
+    await sandbox.WaitForReadyAsync();
+    
+    Console.WriteLine($"✅ Sandbox is ready!");
+    Console.WriteLine($"   Status: {sandbox.Status}");
+    Console.WriteLine();
+    
+    // Execute a command on the sandbox
+    Console.WriteLine("🔧 Executing command on sandbox...");
+    var command = "echo 'Hello from Sandstorm!' && whoami && pwd";
+    var process = await sandbox.RunCommandAsync(command);
+    var result = await process.WaitForCompletionAsync();
+    
+    Console.WriteLine($"📋 Command execution result:");
+    Console.WriteLine($"   Command: {command}");
+    Console.WriteLine($"   Exit Code: {result.ExitCode}");
+    Console.WriteLine($"   Output: {result.StandardOutput}");
+    Console.WriteLine($"   Error: {result.StandardError}");
+    Console.WriteLine($"   Duration: {result.Duration.TotalMilliseconds}ms");
+    Console.WriteLine();
+    
+    if (result.ExitCode == 0)
+    {
+        Console.WriteLine("🎉 SUCCESS: End-to-end sandbox provisioning and command execution completed!");
+        Console.WriteLine("   ✓ VM provisioned");
+        Console.WriteLine("   ✓ Agent installed and connected");
+        Console.WriteLine("   ✓ Command executed through orchestrator-agent architecture");
+    }
+    else
+    {
+        Console.WriteLine("❌ Command execution failed");
+    }
+    
+    Console.WriteLine();
+    Console.WriteLine("🏗️  Architecture flow:");
+    Console.WriteLine("   SandstormClient → SandboxManager → CloudProvider → VM Provisioning");
+    Console.WriteLine("   VM → Agent Installation → Agent connects to Orchestrator");
+    Console.WriteLine("   Command → Orchestrator → Agent → VM Execution → Results back");
+    
 }
 catch (Exception ex)
 {
-    Console.WriteLine($"Orchestrator communication test: {ex.Message}");
+    Console.WriteLine($"❌ Error: {ex.Message}");
     Console.WriteLine();
-    Console.WriteLine("To test with running orchestrator:");
-    Console.WriteLine("1. Start orchestrator: cd Sandstorm.Orchestrator && dotnet run");
-    Console.WriteLine("2. Start agent: cd Sandstorm.Agent && SANDSTORM_SANDBOX_ID=demo-sandbox dotnet run");
-    Console.WriteLine("3. Run this demo again");
+    Console.WriteLine("💡 To run the real end-to-end demo:");
+    Console.WriteLine("   1. Set Azure environment variables (AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_SUBSCRIPTION_ID)");
+    Console.WriteLine("   2. Start orchestrator: cd Sandstorm.Orchestrator && dotnet run");
+    Console.WriteLine("   3. Run this demo for real Azure VM provisioning and command execution");
+    Console.WriteLine();
+    Console.WriteLine("💡 For local testing with existing agent:");
+    Console.WriteLine("   1. Start orchestrator: cd Sandstorm.Orchestrator && dotnet run");
+    Console.WriteLine("   2. Start agent: cd Sandstorm.Agent && SANDSTORM_SANDBOX_ID=demo-sandbox dotnet run");
+    Console.WriteLine("   3. Set Azure credentials and run this demo");
 }
 
 Console.WriteLine("\nDemo completed. Press any key to exit...");
