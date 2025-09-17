@@ -7,12 +7,12 @@ namespace Sandstorm.Orchestrator.Services;
 public class OrchestratorService : Grpc.OrchestratorService.OrchestratorServiceBase
 {
     private readonly ILogger<OrchestratorService> _logger;
-    private readonly ConcurrentDictionary<string, AgentConnection> _agents = new();
-    private readonly ConcurrentDictionary<string, TaskCompletionSource<CommandResult>> _pendingCommands = new();
+    private readonly OrchestratorState _state;
 
-    public OrchestratorService(ILogger<OrchestratorService> logger)
+    public OrchestratorService(OrchestratorState state, ILogger<OrchestratorService> logger)
     {
         _logger = logger;
+        _state = state;
     }
 
     public override Task<RegisterAgentResponse> RegisterAgent(RegisterAgentRequest request, ServerCallContext context)
@@ -32,7 +32,7 @@ public class OrchestratorService : Grpc.OrchestratorService.OrchestratorServiceB
             Context = context
         };
 
-        _agents.AddOrUpdate(request.AgentId, agent, (key, existing) =>
+        _state.Agents.AddOrUpdate(request.AgentId, agent, (key, existing) =>
         {
             existing.LastHeartbeat = DateTime.UtcNow;
             existing.Status = AgentStatus.AgentReady;
@@ -52,7 +52,7 @@ public class OrchestratorService : Grpc.OrchestratorService.OrchestratorServiceB
 
     public override Task<HeartbeatResponse> Heartbeat(HeartbeatRequest request, ServerCallContext context)
     {
-        if (_agents.TryGetValue(request.AgentId, out var agent))
+       if (_state.Agents.TryGetValue(request.AgentId, out var agent))
         {
             agent.LastHeartbeat = DateTime.UtcNow;
             agent.Status = request.Status;
@@ -79,7 +79,7 @@ public class OrchestratorService : Grpc.OrchestratorService.OrchestratorServiceB
     {
         _logger.LogInformation("Agent {AgentId} connected for command stream", request.AgentId);
 
-        if (!_agents.TryGetValue(request.AgentId, out var agent))
+        if (!_state.Agents.TryGetValue(request.AgentId, out var agent))
         {
             _logger.LogWarning("Unknown agent {AgentId} attempting to get commands", request.AgentId);
             return;
@@ -101,7 +101,7 @@ public class OrchestratorService : Grpc.OrchestratorService.OrchestratorServiceB
         }
         finally
         {
-            if (_agents.TryGetValue(request.AgentId, out var agentToUpdate))
+            if (_state.Agents.TryGetValue(request.AgentId, out var agentToUpdate))
             {
                 agentToUpdate.CommandStream = null;
             }
@@ -113,7 +113,7 @@ public class OrchestratorService : Grpc.OrchestratorService.OrchestratorServiceB
         _logger.LogInformation("Command result received from agent {AgentId} for command {CommandId}", 
             request.AgentId, request.CommandId);
 
-        if (_pendingCommands.TryRemove(request.CommandId, out var tcs))
+        if (_state.PendingCommands.TryRemove(request.CommandId, out var tcs))
         {
             tcs.SetResult(request);
         }
@@ -143,16 +143,16 @@ public class OrchestratorService : Grpc.OrchestratorService.OrchestratorServiceB
     // Public methods for sandbox operations
     public async Task<CommandResult?> ExecuteCommandAsync(string sandboxId, string command, TimeSpan timeout, CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Looking for agent for sandbox {SandboxId}. Total agents: {AgentCount}", sandboxId, _agents.Count);
-        
+        _logger.LogInformation("Looking for agent for sandbox {SandboxId}. Total agents: {AgentCount}", sandboxId, _state.Agents.Count);
+
         // Log all agents for debugging
-        foreach (var agentPair in _agents)
+        foreach (var agentPair in _state.Agents)
         {
             _logger.LogInformation("Agent {AgentId}: Sandbox={SandboxId}, Status={Status}", 
                 agentPair.Value.AgentId, agentPair.Value.SandboxId, agentPair.Value.Status);
         }
         
-        var agent = _agents.Values.FirstOrDefault(a => a.SandboxId == sandboxId && a.Status == AgentStatus.AgentReady);
+        var agent = _state.Agents.Values.FirstOrDefault(a => a.SandboxId == sandboxId && a.Status == AgentStatus.AgentReady);
         if (agent == null)
         {
             _logger.LogWarning("No ready agent found for sandbox {SandboxId}", sandboxId);
@@ -161,7 +161,7 @@ public class OrchestratorService : Grpc.OrchestratorService.OrchestratorServiceB
 
         var commandId = Guid.NewGuid().ToString();
         var tcs = new TaskCompletionSource<CommandResult>();
-        _pendingCommands[commandId] = tcs;
+        _state.PendingCommands[commandId] = tcs;
 
         var commandRequest = new CommandRequest
         {
@@ -185,7 +185,7 @@ public class OrchestratorService : Grpc.OrchestratorService.OrchestratorServiceB
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to send command to agent {AgentId}", agent.AgentId);
-            _pendingCommands.TryRemove(commandId, out _);
+            _state.PendingCommands.TryRemove(commandId, out _);
         }
 
         return null;
@@ -193,7 +193,7 @@ public class OrchestratorService : Grpc.OrchestratorService.OrchestratorServiceB
 
     public IEnumerable<AgentConnection> GetActiveAgents()
     {
-        return _agents.Values.Where(a => DateTime.UtcNow - a.LastHeartbeat < TimeSpan.FromMinutes(2));
+        return _state.Agents.Values.Where(a => DateTime.UtcNow - a.LastHeartbeat < TimeSpan.FromMinutes(2));
     }
 
     public override async Task<ExecuteCommandResponse> ExecuteCommand(ExecuteCommandRequest request, ServerCallContext context)
@@ -241,7 +241,7 @@ public class OrchestratorService : Grpc.OrchestratorService.OrchestratorServiceB
     {
         _logger.LogDebug("Checking if sandbox {SandboxId} is ready", request.SandboxId);
 
-        var agent = _agents.Values.FirstOrDefault(a => a.SandboxId == request.SandboxId && a.Status == AgentStatus.AgentReady);
+        var agent = _state.Agents.Values.FirstOrDefault(a => a.SandboxId == request.SandboxId && a.Status == AgentStatus.AgentReady);
         var ready = agent != null && DateTime.UtcNow - agent.LastHeartbeat < TimeSpan.FromMinutes(2);
 
         return Task.FromResult(new IsSandboxReadyResponse
