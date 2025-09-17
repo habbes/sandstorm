@@ -275,6 +275,8 @@ write_files:
       # Create sandstorm user
       useradd -m -s /bin/bash sandstorm || true
       
+      export HOME=/home/sandstorm
+      export DOTNET_CLI_HOME=/home/sandstorm
       # Create directories
       mkdir -p /opt/sandstorm/agent
       mkdir -p /var/log/sandstorm
@@ -285,22 +287,30 @@ write_files:
       
       # Download and install .NET if not already present
       if ! command -v dotnet &> /dev/null; then
+          echo 'Installing dotnet'
           curl -fsSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel 8.0
           export PATH=""$PATH:$HOME/.dotnet""
           echo 'export PATH=""$PATH:$HOME/.dotnet""' >> /etc/environment
       fi
       
+      export DOTNET_CLI_HOME=$HOME
+      
+      echo ""HOME is $HOME""
+      echo ""DOTNET_CLI_HOME is $DOTNET_CLI_HOME""
+      echo ""cloning sandstorm""
       # Clone the repository and build the agent
       cd /tmp
       git clone https://github.com/habbes/sandstorm.git
       cd sandstorm/Sandstorm
       
+      echo ""Building sandstorm agent""
       # Build the agent as AOT binary for Linux
       dotnet publish Sandstorm.Agent/Sandstorm.Agent.csproj \
           -c Release \
           -o /opt/sandstorm/agent \
           -r linux-x64
       
+      echo ""Generating run-agent.sh script""
       # Create wrapper script for the service
       cat > /opt/sandstorm/agent/run-agent.sh << 'AGENT_EOF'
       #!/bin/bash
@@ -311,6 +321,7 @@ write_files:
       chmod +x /opt/sandstorm/agent/run-agent.sh
       chmod +x /opt/sandstorm/agent/Sandstorm.Agent
       
+      echo ""Generating sandstorm agent service""
       # Create systemd service
       cat > /etc/systemd/system/sandstorm-agent.service << 'SERVICE_EOF'
       [Unit]
@@ -345,7 +356,8 @@ runcmd:
   - systemctl enable docker
   - systemctl start docker
   - pip3 install --upgrade pip
-  - /opt/sandstorm/install-agent.sh
+  - echo 'Start sandbox agent installation' >> /var/log/sandbox-agent-install.log
+  - /opt/sandstorm/install-agent.sh >> /var/log/sandbox-agent-install.log
   - echo 'Sandbox initialization complete' > /var/log/sandbox-ready.log
 ";
     }
