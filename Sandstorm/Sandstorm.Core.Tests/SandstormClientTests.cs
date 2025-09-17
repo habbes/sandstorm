@@ -172,6 +172,30 @@ public class SandboxConfigurationTests
         // Assert
         Assert.NotEqual(config1.Name, config2.Name);
     }
+
+    [Fact]
+    public void SandboxConfiguration_CustomImageId_CanBeSetAndRetrieved()
+    {
+        // Arrange
+        var config = new SandboxConfiguration();
+        var customImageId = "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/images/custom-image";
+        
+        // Act
+        config.CustomImageId = customImageId;
+        
+        // Assert
+        Assert.Equal(customImageId, config.CustomImageId);
+    }
+
+    [Fact]
+    public void SandboxConfiguration_CustomImageId_DefaultsToNull()
+    {
+        // Arrange & Act
+        var config = new SandboxConfiguration();
+        
+        // Assert
+        Assert.Null(config.CustomImageId);
+    }
 }
 
 public class CodeRequestTests
