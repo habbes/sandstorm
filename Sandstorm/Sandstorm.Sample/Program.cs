@@ -35,7 +35,7 @@ try
     Console.WriteLine("📋 Configuring sandbox...");
     var config = new SandboxConfiguration
     {
-        Name = "demo-sandbox-8",
+        Name = "demo-sandbox-12",
         Region = "westus2",
         VmSize = "Standard_B2s",
         Tags = 
@@ -67,9 +67,10 @@ try
     
     // Wait for the sandbox to be ready (agent connected)
     Console.WriteLine("⏳ Waiting for sandbox to be ready (agent to connect)...");
+    sw.Restart();
     await sandbox.WaitForReadyAsync();
     
-    Console.WriteLine($"✅ Sandbox is ready!");
+    Console.WriteLine($"✅ Sandbox is ready after {sw.ElapsedMilliseconds} ms!");
     Console.WriteLine($"   Status: {sandbox.Status}");
     Console.WriteLine();
     
