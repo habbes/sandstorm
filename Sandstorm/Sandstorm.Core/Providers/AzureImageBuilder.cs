@@ -1,4 +1,5 @@
 using Azure.Core;
+using Azure.Identity;
 using Azure.ResourceManager;
 using Azure.ResourceManager.Compute;
 using Azure.ResourceManager.Compute.Models;
@@ -7,6 +8,7 @@ using Azure.ResourceManager.Network.Models;
 using Azure.ResourceManager.Resources;
 using Microsoft.Extensions.Logging;
 using System.Text;
+using System.Text.Json;
 
 namespace Sandstorm.Core.Providers;
 
@@ -350,14 +352,109 @@ runcmd:
         await vm.Value.DeallocateAsync(Azure.WaitUntil.Completed);
         await vm.Value.GeneralizeAsync();
 
-        // Create image from generalized VM
-        // Note: In a real implementation, you would use the correct Azure Compute Image API
-        // For now, we'll return the VM ID as a placeholder since the exact API structure
-        // may vary between SDK versions
-        var imageId = $"/subscriptions/{resourceGroup.Id.SubscriptionId}/resourceGroups/{resourceGroup.Data.Name}/providers/Microsoft.Compute/images/{imageName}";
+        // Create managed image from generalized VM using direct Azure Resource Manager operation
+        var subscriptionId = resourceGroup.Id.SubscriptionId;
+        var resourceGroupName = resourceGroup.Data.Name;
         
-        _logger?.LogInformation("Image captured with ID: {ImageId}", imageId);
-        return imageId;
+        // Construct the image ID
+        var imageResourceId = new ResourceIdentifier($"/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.Compute/images/{imageName}");
+        
+        // Create an HttpClient with Azure authentication for REST calls
+        var credential = new Azure.Identity.DefaultAzureCredential();
+        var httpClient = new HttpClient();
+        
+        // Get access token
+        var tokenRequestContext = new Azure.Core.TokenRequestContext(new[] { "https://management.azure.com/.default" });
+        var accessToken = await credential.GetTokenAsync(tokenRequestContext, cancellationToken);
+        httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken.Token);
+        
+        // Prepare the managed image request body
+        var imagePayload = new
+        {
+            location = location.ToString(),
+            properties = new
+            {
+                sourceVirtualMachine = new
+                {
+                    id = vm.Value.Id.ToString()
+                },
+                hyperVGeneration = "V2"
+            },
+            tags = new
+            {
+                Source = "SandstormImageBuilder",
+                CreatedBy = "Sandstorm"
+            }
+        };
+
+        var jsonPayload = JsonSerializer.Serialize(imagePayload);
+        var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
+
+        // Make REST API call to create the managed image
+        var apiUrl = $"https://management.azure.com{imageResourceId}?api-version=2023-03-01";
+        var response = await httpClient.PutAsync(apiUrl, content, cancellationToken);
+        
+        if (response.IsSuccessStatusCode)
+        {
+            _logger?.LogInformation("Managed image creation initiated successfully");
+            
+            // Wait for the image creation to complete
+            await WaitForImageCreationAsync(imageResourceId.ToString(), httpClient, cancellationToken);
+            
+            _logger?.LogInformation("Image captured with ID: {ImageId}", imageResourceId);
+            httpClient.Dispose();
+            return imageResourceId.ToString();
+        }
+        else
+        {
+            var errorContent = await response.Content.ReadAsStringAsync();
+            httpClient.Dispose();
+            throw new InvalidOperationException($"Failed to create managed image. Status: {response.StatusCode}, Error: {errorContent}");
+        }
+    }
+
+    private async Task WaitForImageCreationAsync(string imageResourceId, HttpClient httpClient, CancellationToken cancellationToken)
+    {
+        var timeout = TimeSpan.FromMinutes(20);
+        var start = DateTime.UtcNow;
+        
+        while (DateTime.UtcNow - start < timeout)
+        {
+            if (cancellationToken.IsCancellationRequested)
+                throw new OperationCanceledException();
+                
+            try
+            {
+                var apiUrl = $"https://management.azure.com{imageResourceId}?api-version=2023-03-01";
+                var response = await httpClient.GetAsync(apiUrl, cancellationToken);
+                
+                if (response.IsSuccessStatusCode)
+                {
+                    var responseText = await response.Content.ReadAsStringAsync();
+                    if (responseText.Contains("\"provisioningState\":\"Succeeded\""))
+                    {
+                        _logger?.LogInformation("Image creation completed successfully");
+                        return;
+                    }
+                    else if (responseText.Contains("\"provisioningState\":\"Failed\""))
+                    {
+                        throw new InvalidOperationException($"Image creation failed: {responseText}");
+                    }
+                    
+                    _logger?.LogDebug("Image creation in progress...");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Error checking image creation status");
+            }
+            
+            await Task.Delay(TimeSpan.FromSeconds(30), cancellationToken);
+        }
+        
+        throw new TimeoutException($"Image creation did not complete within {timeout.TotalMinutes} minutes");
+        
+        throw new TimeoutException($"Image creation did not complete within {timeout.TotalMinutes} minutes");
     }
 
     private async Task CleanupTempVmAsync(
