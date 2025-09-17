@@ -15,15 +15,12 @@ public interface ISandbox : IAsyncDisposable
     /// </summary>
     SandboxStatus Status { get; }
 
+    string? PublicIpAddress { get; }
+
     /// <summary>
     /// The configuration used to create this sandbox
     /// </summary>
     SandboxConfiguration Configuration { get; }
-
-    /// <summary>
-    /// The public IP address of the sandbox (if available)
-    /// </summary>
-    string? PublicIpAddress { get; }
 
     /// <summary>
     /// Waits for the sandbox to be ready for use

@@ -11,7 +11,8 @@ builder.WebHost.ConfigureKestrel(options =>
     });
 });
 
-// Add services to the container.
+
+builder.Services.AddSingleton<OrchestratorState>();
 builder.Services.AddGrpc();
 builder.Services.AddLogging();
 

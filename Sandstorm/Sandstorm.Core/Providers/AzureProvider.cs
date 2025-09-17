@@ -55,7 +55,7 @@ public class AzureProvider : ICloudProvider
     {
         _logger?.LogInformation("Creating Azure sandbox: {SandboxName}", config.Name);
 
-        var resourceGroupName = config.ResourceGroupName ?? $"rg-{config.Name}";
+        var resourceGroupName = config.ResourceGroupName ?? $"sandstorm-rg-s{config.Name}";
         var sandbox = new AzureSandbox(config, resourceGroupName, orchestratorEndpoint, _armClient, _logger);
 
         _sandboxes[sandbox.SandboxId] = sandbox;
