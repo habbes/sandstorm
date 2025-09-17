@@ -39,7 +39,7 @@ internal class AzureSandbox : ISandbox
         _armClient = armClient ?? throw new ArgumentNullException(nameof(armClient));
         _logger = logger;
         _sandboxId = $"sandbox-{Guid.NewGuid():N}";
-        
+
         // Initialize orchestrator client
         _orchestratorClient = new OrchestratorClient(_orchestratorEndpoint, _logger);
     }
@@ -62,7 +62,7 @@ internal class AzureSandbox : ISandbox
             _logger?.LogDebug("Creating resource group: {ResourceGroupName}", _resourceGroupName);
             var subscription = _armClient.GetDefaultSubscription();
             var resourceGroupData = new ResourceGroupData(AzureLocation.WestUS2);
-            
+
             // Add tags
             foreach (var tag in _configuration.Tags)
             {
@@ -241,7 +241,7 @@ internal class AzureSandbox : ISandbox
     }
 
     private string GenerateCloudInitScript()
-    {        
+    {
         return $@"#cloud-config
 package_update: true
 package_upgrade: true
@@ -296,7 +296,7 @@ write_files:
       cd sandstorm/Sandstorm
       
       # Build the agent as AOT binary for Linux
-      $HOME/.dotnet/dotnet publish Sandstorm.Agent/Sandstorm.Agent.csproj \
+      dotnet publish Sandstorm.Agent/Sandstorm.Agent.csproj \
           -c Release \
           -o /opt/sandstorm/agent \
           -r linux-x64
@@ -367,7 +367,7 @@ runcmd:
                 {
                     var vmData = await _virtualMachine.GetAsync();
                     var instanceView = await _virtualMachine.InstanceViewAsync();
-                    
+
                     var powerState = instanceView.Value.Statuses?.FirstOrDefault(s => s.Code?.StartsWith("PowerState/") == true);
                     if (powerState?.Code == "PowerState/running")
                     {
@@ -407,10 +407,10 @@ runcmd:
         if (_orchestratorClient != null)
         {
             _logger?.LogInformation("Waiting for agent to connect to orchestrator for sandbox {SandboxId}", _sandboxId);
-            
-            var timeout = DateTime.UtcNow.AddMinutes(5); // 5 minute timeout for agent connectivity
+
+            var timeout = DateTime.UtcNow.AddMinutes(60); // TODO: temporarily set high timeout for debugging
             bool agentReady = false;
-            
+
             while (!agentReady && DateTime.UtcNow < timeout)
             {
                 if (cancellationToken.IsCancellationRequested)
@@ -431,13 +431,13 @@ runcmd:
                     await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
                 }
             }
-            
+
             if (!agentReady)
             {
                 _logger?.LogWarning("Agent failed to connect to orchestrator within timeout for sandbox {SandboxId}", _sandboxId);
                 throw new TimeoutException($"Agent failed to connect to orchestrator within 5 minutes for sandbox {_sandboxId}");
             }
-            
+
             _logger?.LogInformation("Agent successfully connected to orchestrator for sandbox {SandboxId}", _sandboxId);
         }
     }
@@ -482,7 +482,7 @@ runcmd:
     public async Task DeleteAsync(CancellationToken cancellationToken = default)
     {
         _status = SandboxStatus.Stopping;
-        
+
         try
         {
             if (_resourceGroup != null)
@@ -529,7 +529,7 @@ runcmd:
         script.AppendLine($"cat > code.cs << 'EOF'");
         script.AppendLine(code.Code);
         script.AppendLine("EOF");
-        
+
         if (code.NuGetPackages.Any())
         {
             script.AppendLine("dotnet new console --force");
@@ -538,7 +538,7 @@ runcmd:
                 script.AppendLine($"dotnet add package {package}");
             }
         }
-        
+
         script.AppendLine("dotnet run code.cs");
         return script.ToString();
     }
@@ -548,12 +548,12 @@ runcmd:
         var script = new StringBuilder();
         script.AppendLine("#!/bin/bash");
         script.AppendLine("cd /tmp");
-        
+
         if (code.PipPackages.Any())
         {
             script.AppendLine($"pip3 install {string.Join(" ", code.PipPackages)}");
         }
-        
+
         script.AppendLine($"cat > code.py << 'EOF'");
         script.AppendLine(code.Code);
         script.AppendLine("EOF");
@@ -567,13 +567,13 @@ runcmd:
         script.AppendLine("#!/bin/bash");
         script.AppendLine("cd /tmp");
         script.AppendLine("mkdir -p jsproject && cd jsproject");
-        
+
         if (code.NpmPackages.Any())
         {
             script.AppendLine("npm init -y");
             script.AppendLine($"npm install {string.Join(" ", code.NpmPackages)}");
         }
-        
+
         script.AppendLine($"cat > code.js << 'EOF'");
         script.AppendLine(code.Code);
         script.AppendLine("EOF");
@@ -586,15 +586,8 @@ runcmd:
         if (string.IsNullOrWhiteSpace(command))
             throw new ArgumentException("Command cannot be null or empty", nameof(command));
 
-        // Use orchestrator if available, otherwise fall back to SSH
-        if (_orchestratorClient != null)
-        {
-            return await ExecuteCommandViaOrchestratorAsync(command, cancellationToken);
-        }
-        else
-        {
-            return await ExecuteCommandViaSshAsync(command, cancellationToken);
-        }
+        Debug.Assert(_orchestratorClient != null, "Orchestrator client should be initialized");
+        return await ExecuteCommandViaOrchestratorAsync(command, cancellationToken);
     }
 
     private async Task<ExecutionResult> ExecuteCommandViaOrchestratorAsync(string command, CancellationToken cancellationToken)
@@ -625,7 +618,7 @@ runcmd:
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Failed to execute command via orchestrator for sandbox {SandboxId}: {Command}", _sandboxId, command);
-            
+
             return new ExecutionResult
             {
                 ExitCode = -1,
@@ -636,27 +629,6 @@ runcmd:
         }
     }
 
-    private async Task<ExecutionResult> ExecuteCommandViaSshAsync(string command, CancellationToken cancellationToken)
-    {
-        if (_publicIpAddress == null)
-            throw new InvalidOperationException("VM not ready - no public IP address available");
-
-        var startTime = DateTime.UtcNow;
-        
-        // For now, return a simulated error indicating SSH is deprecated
-        var duration = DateTime.UtcNow - startTime;
-        
-        _logger?.LogWarning("SSH execution is deprecated. Please configure an orchestrator endpoint.");
-        
-        return new ExecutionResult
-        {
-            ExitCode = -1,
-            StandardOutput = "",
-            StandardError = "SSH execution is deprecated. The sandbox uses an orchestrator-agent architecture for better security. Please configure the OrchestratorEndpoint in your SandboxConfiguration.",
-            Duration = duration
-        };
-    }
-
     public async ValueTask DisposeAsync()
     {
         if (_disposed)
@@ -665,10 +637,10 @@ runcmd:
         }
 
         _disposed = true;
-        
+
         // Dispose orchestrator client
         _orchestratorClient?.Dispose();
-        
+
         await DeleteAsync();
     }
 }
