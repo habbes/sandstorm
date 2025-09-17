@@ -17,6 +17,7 @@ namespace Sandstorm.Core.Providers;
 /// </summary>
 internal class AzureSandbox : ISandbox
 {
+    const bool CREATE_PUBLIC_IP = false; // set to true when debuging
     private readonly SandboxConfiguration _configuration;
     private readonly string _resourceGroupName;
     private readonly string _orchestratorEndpoint;
@@ -117,23 +118,30 @@ internal class AzureSandbox : ISandbox
             .CreateOrUpdateAsync(Azure.WaitUntil.Completed, $"vnet-{_configuration.Name}", vnetData, cancellationToken);
         var vnet = vnetOperation.Value;
 
-        // Create Public IP
-        var publicIpData = new PublicIPAddressData()
-        {
-            Location = location,
-            PublicIPAllocationMethod = NetworkIPAllocationMethod.Static,
-            Sku = new PublicIPAddressSku() { Name = PublicIPAddressSkuName.Standard }
-        };
+        PublicIPAddressResource? publicIp = null;
+        if (CREATE_PUBLIC_IP)
+        {// Create Public IP
+            var publicIpData = new PublicIPAddressData()
+            {
+                Location = location,
+                PublicIPAllocationMethod = NetworkIPAllocationMethod.Static,
+                Sku = new PublicIPAddressSku() { Name = PublicIPAddressSkuName.Standard }
+            };
 
-        var publicIpOperation = await _resourceGroup.GetPublicIPAddresses()
-            .CreateOrUpdateAsync(Azure.WaitUntil.Completed, $"pip-{_configuration.Name}", publicIpData, cancellationToken);
-        var publicIp = publicIpOperation.Value;
+            var publicIpOperation = await _resourceGroup.GetPublicIPAddresses()
+                .CreateOrUpdateAsync(Azure.WaitUntil.Completed, $"pip-{_configuration.Name}", publicIpData, cancellationToken);
+            publicIp = publicIpOperation.Value;
+        }
 
         // Create Network Security Group with SSH access
-        var nsgData = new NetworkSecurityGroupData()
+        NetworkSecurityGroupResource? nsg = null;
+
+        if (CREATE_PUBLIC_IP)
         {
-            Location = location,
-            SecurityRules =
+            var nsgData = new NetworkSecurityGroupData()
+            {
+                Location = location,
+                SecurityRules =
             {
                 new SecurityRuleData()
                 {
@@ -148,11 +156,12 @@ internal class AzureSandbox : ISandbox
                     Direction = SecurityRuleDirection.Inbound
                 }
             }
-        };
+            };
 
-        var nsgOperation = await _resourceGroup.GetNetworkSecurityGroups()
-            .CreateOrUpdateAsync(Azure.WaitUntil.Completed, $"nsg-{_configuration.Name}", nsgData, cancellationToken);
-        var nsg = nsgOperation.Value;
+            var nsgOperation = await _resourceGroup.GetNetworkSecurityGroups()
+                .CreateOrUpdateAsync(Azure.WaitUntil.Completed, $"nsg-{_configuration.Name}", nsgData, cancellationToken);
+            nsg = nsgOperation.Value;
+        }
 
         // Create Network Interface
         var nicData = new NetworkInterfaceData()
@@ -166,10 +175,10 @@ internal class AzureSandbox : ISandbox
                     PrivateIPAllocationMethod = NetworkIPAllocationMethod.Dynamic,
                     Primary = true,
                     Subnet = new SubnetData() { Id = vnet.Data.Subnets.First().Id },
-                    PublicIPAddress = new PublicIPAddressData() { Id = publicIp.Id }
+                    PublicIPAddress = publicIp != null ? new PublicIPAddressData() { Id = publicIp.Id } : null
                 }
             },
-            NetworkSecurityGroup = new NetworkSecurityGroupData() { Id = nsg.Id }
+            NetworkSecurityGroup = nsg != null ? new NetworkSecurityGroupData() { Id = nsg.Id } : null
         };
 
         var nicOperation = await _resourceGroup.GetNetworkInterfaces()
@@ -235,9 +244,11 @@ internal class AzureSandbox : ISandbox
             .CreateOrUpdateAsync(Azure.WaitUntil.Completed, vmName, vmData, cancellationToken);
         _virtualMachine = vmOperation.Value;
 
-        // Get the public IP address
-        var publicIpResource = await publicIp.GetAsync();
-        _publicIpAddress = publicIpResource.Value.Data.IPAddress;
+        if (CREATE_PUBLIC_IP)
+        {
+            var publicIpResource = await publicIp.GetAsync();
+            _publicIpAddress = publicIpResource.Value.Data.IPAddress;
+        }
     }
 
     private string GenerateCloudInitScript()
