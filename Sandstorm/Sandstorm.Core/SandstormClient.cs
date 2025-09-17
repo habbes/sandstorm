@@ -31,55 +31,19 @@ public class SandstormClient
     /// <summary>
     /// Gets the sandboxes management interface
     /// </summary>
-    public ISandboxManager Sandboxes => new SandboxManager(_cloudProvider, OrchestratorEndpoint, _logger);
-}
-
-/// <summary>
-/// Interface for managing sandboxes
-/// </summary>
-public interface ISandboxManager
-{
-    /// <summary>
-    /// Creates a new sandbox with default configuration
-    /// </summary>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>The created sandbox</returns>
-    Task<ISandbox> CreateAsync(CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Creates a new sandbox with the specified configuration
-    /// </summary>
-    /// <param name="configuration">Configuration for the sandbox</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>The created sandbox</returns>
-    Task<ISandbox> CreateAsync(SandboxConfiguration configuration, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Gets an existing sandbox by its identifier
-    /// </summary>
-    /// <param name="sandboxId">The sandbox identifier</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>The sandbox instance</returns>
-    Task<ISandbox> GetAsync(string sandboxId, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Lists all active sandboxes
-    /// </summary>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Collection of active sandboxes</returns>
-    Task<IEnumerable<ISandbox>> ListAsync(CancellationToken cancellationToken = default);
+    public SandboxManager Sandboxes => new SandboxManager(_cloudProvider, OrchestratorEndpoint, _logger);
 }
 
 /// <summary>
 /// Implementation of ISandboxManager
 /// </summary>
-internal class SandboxManager : ISandboxManager
+public class SandboxManager
 {
     private readonly ICloudProvider _cloudProvider;
     private readonly string _orchestratorEndpoint;
     private readonly ILogger? _logger;
 
-    public SandboxManager(ICloudProvider cloudProvider, string orchestratorEndpoint, ILogger? logger)
+    internal SandboxManager(ICloudProvider cloudProvider, string orchestratorEndpoint, ILogger? logger)
     {
         _cloudProvider = cloudProvider;
         _orchestratorEndpoint = orchestratorEndpoint;
