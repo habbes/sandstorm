@@ -319,11 +319,16 @@ runcmd:
                 var powerState = instanceView.Value.Statuses?.FirstOrDefault(s => s.Code?.StartsWith("PowerState/") == true);
                 if (powerState?.Code == "PowerState/running")
                 {
-                    // VM is running, but we need to wait for setup script to complete
-                    // In a real implementation, you might want to check for completion markers
-                    _logger?.LogDebug("VM is running, allowing additional time for setup completion");
-                    await Task.Delay(TimeSpan.FromMinutes(10), cancellationToken); // Allow time for full setup
-                    return;
+                    // VM is running, now check for setup completion marker
+                    _logger?.LogDebug("VM is running, checking for setup completion...");
+                    
+                    if (await CheckSetupCompletionAsync(vm.Value, cancellationToken))
+                    {
+                        _logger?.LogInformation("Setup completed successfully");
+                        return;
+                    }
+                    
+                    _logger?.LogDebug("Setup still in progress, continuing to wait...");
                 }
             }
             catch (Exception ex)
@@ -331,10 +336,49 @@ runcmd:
                 _logger?.LogWarning(ex, "Error checking VM status: {VmName}", vmName);
             }
 
-            await Task.Delay(TimeSpan.FromSeconds(30), cancellationToken);
+            await Task.Delay(TimeSpan.FromSeconds(20), cancellationToken);
         }
 
         throw new TimeoutException($"VM setup failed to complete within {timeout.TotalMinutes} minutes");
+    }
+
+    private async Task<bool> CheckSetupCompletionAsync(VirtualMachineResource vm, CancellationToken cancellationToken)
+    {
+        try
+        {
+            // Check if setup completion marker exists using VM Run Command
+            var checkCommand = "test -f /var/log/image-setup-complete.log && echo 'READY' || echo 'NOT_READY'";
+            
+            var runCommandInput = new RunCommandInput("RunShellScript")
+            {
+                Script = { checkCommand }
+            };
+
+            var result = await vm.RunCommandAsync(
+                Azure.WaitUntil.Completed,
+                runCommandInput,
+                cancellationToken);
+
+            // Check the output for completion status
+            if (result.HasValue && result.Value.Value != null)
+            {
+                var outputs = result.Value.Value;
+                foreach (var output in outputs)
+                {
+                    if (output.Message?.Contains("READY") == true)
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "Error checking setup completion status, assuming not ready");
+            return false;
+        }
     }
 
     private async Task<string> CaptureVmAsImageAsync(
