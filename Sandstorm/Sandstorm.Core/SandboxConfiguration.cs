@@ -45,6 +45,12 @@ public class SandboxConfiguration
     /// </summary>
     public TimeSpan? AutoDeleteAfter { get; set; }
 
+    /// <summary>
+    /// Custom VM image ID/name to use instead of base Ubuntu image
+    /// When specified, this pre-baked image should have all dependencies already installed
+    /// </summary>
+    public string? CustomImageId { get; set; }
+
     private static string GenerateRandomPassword()
     {
         // Generate a random password that meets Azure VM requirements
