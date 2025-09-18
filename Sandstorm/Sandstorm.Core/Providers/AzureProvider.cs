@@ -103,10 +103,10 @@ public class AzureProvider : ICloudProvider
     public async Task<string> CreateDaultImage(string orchestratorEndpoint, CancellationToken cancellationToken = default)
     {
         _logger?.LogInformation("Creating default Azure VM image with orchestrator endpoint: {OrchestratorEndpoint}", orchestratorEndpoint);
-        var imageBuilder = new AzureImageBuilder(_armClient, _logger);
+        var imageBuilder = new AzureImageBuilder(_armClient, _credential, _logger);
         var imageId = await imageBuilder.CreateCustomImageAsync(
-            "sandstorm-base-image",
-            $"sandstorm-default-image-{Guid.NewGuid()}",
+            "sandstorm-image-rg",
+            $"sandstorm-{Guid.NewGuid()}",
             orchestratorEndpoint: orchestratorEndpoint
         );
 

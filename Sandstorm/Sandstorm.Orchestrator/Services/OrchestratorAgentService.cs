@@ -4,12 +4,12 @@ using System.Collections.Concurrent;
 
 namespace Sandstorm.Orchestrator.Services;
 
-public class OrchestratorService : Grpc.OrchestratorService.OrchestratorServiceBase
+public class OrchestratorAgentService : Grpc.OrchestratorService.OrchestratorServiceBase
 {
-    private readonly ILogger<OrchestratorService> _logger;
+    private readonly ILogger<OrchestratorAgentService> _logger;
     private readonly OrchestratorState _state;
 
-    public OrchestratorService(OrchestratorState state, ILogger<OrchestratorService> logger)
+    public OrchestratorAgentService(OrchestratorState state, ILogger<OrchestratorAgentService> logger)
     {
         _logger = logger;
         _state = state;

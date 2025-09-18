@@ -19,11 +19,13 @@ public class AzureImageBuilder
 {
     private readonly ArmClient _armClient;
     private readonly ILogger? _logger;
+    private readonly TokenCredential _tokenCredential;
 
-    public AzureImageBuilder(ArmClient armClient, ILogger? logger = null)
+    public AzureImageBuilder(ArmClient armClient, TokenCredential tokenCredential, ILogger? logger = null)
     {
         _armClient = armClient ?? throw new ArgumentNullException(nameof(armClient));
         _logger = logger;
+        _tokenCredential = tokenCredential;
     }
 
     /// <summary>
@@ -54,7 +56,7 @@ public class AzureImageBuilder
         var resourceGroup = resourceGroupOperation.Value;
 
         // Create a temporary VM to prepare the image
-        var tempVmName = $"temp-{imageName}-{Guid.NewGuid():N}";
+        var tempVmName = $"sandstorm-{Guid.NewGuid():N}";
         _ = await CreateTempVmAsync(resourceGroup, tempVmName, location, orchestratorEndpoint, cancellationToken);
 
         try
@@ -402,9 +404,9 @@ runcmd:
         
         // Construct the image ID
         var imageResourceId = new ResourceIdentifier($"/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.Compute/images/{imageName}");
-        
+
         // Create an HttpClient with Azure authentication for REST calls
-        var credential = new Azure.Identity.DefaultAzureCredential();
+        var credential = _tokenCredential;
         var httpClient = new HttpClient();
         
         // Get access token

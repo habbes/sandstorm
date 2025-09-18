@@ -33,30 +33,10 @@ try
     
     // Create sandbox configuration
     Console.WriteLine("📋 Configuring sandbox...");
-    var config = new SandboxConfiguration
-    {
-        Name = "demo-sandbox-12",
-        Region = "westus2",
-        VmSize = "Standard_B2s",
-        Tags = 
-        {
-            ["Environment"] = "Demo",
-            ["Purpose"] = "End-to-end sandbox provisioning demo",
-            ["Owner"] = "SandstormDemo"
-        }
-    };
-    
-    Console.WriteLine($"   Name: {config.Name}");
-    Console.WriteLine($"   Region: {config.Region}");
-    Console.WriteLine($"   VM Size: {config.VmSize}");
-    Console.WriteLine($"   Admin Username: {config.AdminUsername}");
-    Console.WriteLine($"   Admin Password: {config.AdminPassword}");
-    Console.WriteLine();
-    
     // Create the sandbox - this will provision VM and install agent
     Console.WriteLine("🚀 Creating sandbox (this will provision VM and install agent)...");
     var sw = Stopwatch.StartNew();
-    await using var sandbox = await client.Sandboxes.CreateAsync(config);
+    await using var sandbox = await client.Sandboxes.CreateAsync();
     Console.WriteLine($"   Sandbox creation initiated in {sw.ElapsedMilliseconds} ms");
 
     Console.WriteLine($"✅ Sandbox created successfully!");

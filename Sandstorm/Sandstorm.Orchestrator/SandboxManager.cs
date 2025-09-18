@@ -1,17 +1,16 @@
 ﻿using Sandstorm.Core;
-using Sandstorm.Orchestrator.Services;
 
 namespace Sandstorm.Orchestrator;
 
-public class SandboxManager
+internal class SandboxManager
 {
     private readonly ICloudProvider _cloudProvider;
     private readonly string _orchestratorEndpoint;
-    private readonly ILogger? _logger;
+    private readonly ILogger<SandboxManager>? _logger;
     private readonly OrchestratorState _state;
     private bool _initialized = false;
 
-    internal SandboxManager(OrchestratorState store, ICloudProvider cloudProvider, string orchestratorEndpoint, ILogger? logger)
+    public SandboxManager(OrchestratorState store, ICloudProvider cloudProvider, OrchestratorEndpoint orchestratorEndpoint, ILogger<SandboxManager>? logger)
     {
         _cloudProvider = cloudProvider;
         _orchestratorEndpoint = orchestratorEndpoint;
@@ -62,5 +61,16 @@ public class SandboxManager
         {
             await Initialize();
         }
+    }
+
+    public void RegisterProcess(string sandboxId, IProcess process)
+    {
+        _state.Processes[(sandboxId, process.ProcessId)] = process;
+    }
+
+    public IProcess? GetProcess(string sandboxId, string processId)
+    {
+        _state.Processes.TryGetValue((sandboxId, processId), out var process);
+        return process;
     }
 }
