@@ -42,10 +42,141 @@ var app = builder.Build();
 
 // Configure the HTTP request pipeline.
 app.MapGrpcService<OrchestratorAgentService>();
-app.MapGet("/", () => "Communication with gRPC endpoints must be made through a gRPC client. To learn how to create a client, visit: https://go.microsoft.com/fwlink/?linkid=2086909");
+app.MapGet("/", () => "Sandstorm API - Communication with gRPC endpoints must be made through a gRPC client. For sandbox management, use the REST API endpoints.");
 
-app.MapPost("/sandboxes", (SandboxManagementService sandboxes) => sandboxes.CreateSandbox());
+// Sandbox management endpoints
+app.MapPost("/api/sandboxes", async (SandboxManagementService service, CreateSandboxRequest? request) => 
+{
+    try
+    {
+        var result = await service.CreateSandbox(request);
+        return Results.Ok(result);
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(detail: ex.Message, statusCode: 500);
+    }
+});
 
-app.MapPost("/commands", (SandboxManagementService sandboxes, SendCommandRequest req) => sandboxes.SendCommand(req));
+app.MapGet("/api/sandboxes/{sandboxId}", async (SandboxManagementService service, string sandboxId) => 
+{
+    try
+    {
+        var result = await service.GetSandbox(sandboxId);
+        return Results.Ok(result);
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.NotFound(ex.Message);
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(detail: ex.Message, statusCode: 500);
+    }
+});
+
+app.MapGet("/api/sandboxes", async (SandboxManagementService service) => 
+{
+    try
+    {
+        var result = await service.ListSandboxes();
+        return Results.Ok(result);
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(detail: ex.Message, statusCode: 500);
+    }
+});
+
+app.MapDelete("/api/sandboxes/{sandboxId}", async (SandboxManagementService service, string sandboxId) => 
+{
+    try
+    {
+        await service.DeleteSandbox(sandboxId);
+        return Results.Ok(new { Message = "Sandbox deletion initiated" });
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.NotFound(ex.Message);
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(detail: ex.Message, statusCode: 500);
+    }
+});
+
+// Command execution endpoints
+app.MapPost("/api/sandboxes/{sandboxId}/commands", async (SandboxManagementService service, string sandboxId, SendCommandRequest request) => 
+{
+    if (request.SandboxId != sandboxId)
+    {
+        return Results.BadRequest("SandboxId in URL and request body must match");
+    }
+    
+    try
+    {
+        var result = await service.SendCommand(request);
+        return Results.Ok(result);
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.NotFound(ex.Message);
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(detail: ex.Message, statusCode: 500);
+    }
+});
+
+app.MapGet("/api/sandboxes/{sandboxId}/commands/{processId}/status", async (SandboxManagementService service, string sandboxId, string processId) => 
+{
+    try
+    {
+        var result = await service.GetCommandStatus(new GetCommandStatusRequest(sandboxId, processId));
+        return Results.Ok(result);
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.NotFound(ex.Message);
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(detail: ex.Message, statusCode: 500);
+    }
+});
+
+app.MapGet("/api/sandboxes/{sandboxId}/commands/{processId}/logs", async (SandboxManagementService service, string sandboxId, string processId) => 
+{
+    try
+    {
+        var result = await service.GetCommandLogs(new GetCommandLogsRequest(sandboxId, processId));
+        return Results.Ok(result);
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.NotFound(ex.Message);
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(detail: ex.Message, statusCode: 500);
+    }
+});
+
+app.MapDelete("/api/sandboxes/{sandboxId}/commands/{processId}", async (SandboxManagementService service, string sandboxId, string processId) => 
+{
+    try
+    {
+        await service.TerminateProcess(new TerminateProcessRequest(sandboxId, processId));
+        return Results.Ok(new { Message = "Process terminated" });
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.NotFound(ex.Message);
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(detail: ex.Message, statusCode: 500);
+    }
+});
 
 app.Run();
