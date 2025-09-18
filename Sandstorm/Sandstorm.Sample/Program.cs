@@ -1,8 +1,5 @@
-﻿using Azure.Identity;
-using dotenv.net;
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using Sandstorm.Core;
-using Sandstorm.Core.Providers;
 using System.Diagnostics;
 
 
@@ -10,31 +7,24 @@ using System.Diagnostics;
 Console.WriteLine("=== Sandstorm Cloud Sandbox Platform Demo ===");
 Console.WriteLine();
 
-// Load environment variables from .env file if present
-DotEnv.Load(options: new DotEnvOptions(probeForEnv: true, probeLevelsToSearch: 3));
-
 try
 {
-    var tenantId = Environment.GetEnvironmentVariable("TENANT_ID") ?? throw new Exception("TENANT_ID env var must be set");
-    var clientId = Environment.GetEnvironmentVariable("CLIENT_ID") ?? throw new Exception("CLIENT_ID env var must be set");
-    var clientSecret = Environment.GetEnvironmentVariable("CLIENT_SECRET") ?? throw new Exception("CLIENT_SECRET env var must be set");
-    var subscriptionId = Environment.GetEnvironmentVariable("SUBSCRIPTION_ID") ?? throw new Exception("SUBSCRIPTION_ID env var must be set");
-    var orchestratorEndpoint = Environment.GetEnvironmentVariable("ORCHESTRATOR_ENDPOINT") ?? "http://localhost:5000";
+    // Get the Sandstorm API endpoint from environment or use default
+    var apiEndpoint = Environment.GetEnvironmentVariable("SANDSTORM_API_ENDPOINT") ?? "http://localhost:5000";
 
-    Console.WriteLine("🔧 Using real Azure provider");
-    var cloudProvider = new AzureProvider(tenantId, clientId, clientSecret, subscriptionId);
+    Console.WriteLine("🔧 Using Sandstorm API service");
+    Console.WriteLine($"   API endpoint: {apiEndpoint}");
     
-    // Create the SandstormClient - this is the ONLY interface the sample should use
-    var client = new SandstormClient(cloudProvider, orchestratorEndpoint);
+    // Create the SandstormClient using the new API-based approach
+    // No Azure credentials or cloud provider configuration needed!
+    var client = new SandstormClient(apiEndpoint);
     
     Console.WriteLine("✅ Sandstorm client initialized");
-    Console.WriteLine($"   Orchestrator endpoint: {client.OrchestratorEndpoint}");
+    Console.WriteLine($"   API endpoint: {client.ApiEndpoint}");
     Console.WriteLine();
     
-    // Create sandbox configuration
-    Console.WriteLine("📋 Configuring sandbox...");
-    // Create the sandbox - this will provision VM and install agent
-    Console.WriteLine("🚀 Creating sandbox (this will provision VM and install agent)...");
+    // Create the sandbox - this will call the API service which manages everything
+    Console.WriteLine("🚀 Creating sandbox (this will be handled by the API service)...");
     var sw = Stopwatch.StartNew();
     await using var sandbox = await client.Sandboxes.CreateAsync();
     Console.WriteLine($"   Sandbox creation initiated in {sw.ElapsedMilliseconds} ms");
@@ -71,9 +61,9 @@ try
     if (result.ExitCode == 0)
     {
         Console.WriteLine("🎉 SUCCESS: End-to-end sandbox provisioning and command execution completed!");
-        Console.WriteLine("   ✓ VM provisioned");
+        Console.WriteLine("   ✓ API service handled VM provisioning");
         Console.WriteLine("   ✓ Agent installed and connected");
-        Console.WriteLine("   ✓ Command executed through orchestrator-agent architecture");
+        Console.WriteLine("   ✓ Command executed through API → orchestrator → agent architecture");
     }
     else
     {
@@ -81,15 +71,29 @@ try
     }
     
     Console.WriteLine();
-    Console.WriteLine("🏗️  Architecture flow:");
-    Console.WriteLine("   SandstormClient → SandboxManager → CloudProvider → VM Provisioning");
+    Console.WriteLine("🏗️  New Architecture flow:");
+    Console.WriteLine("   SandstormClient → HTTP API → SandboxManager → CloudProvider → VM Provisioning");
     Console.WriteLine("   VM → Agent Installation → Agent connects to Orchestrator");
-    Console.WriteLine("   Command → Orchestrator → Agent → VM Execution → Results back");
+    Console.WriteLine("   Command → HTTP API → Orchestrator → Agent → VM Execution → Results back");
+    Console.WriteLine();
+    Console.WriteLine("🎯 Benefits:");
+    Console.WriteLine("   ✓ No Azure credentials needed in client");
+    Console.WriteLine("   ✓ Simple configuration (just API endpoint)");
+    Console.WriteLine("   ✓ Centralized sandbox management");
+    Console.WriteLine("   ✓ Clean separation of concerns");
     
 }
 catch (Exception ex)
 {
     Console.WriteLine($"❌ Error: {ex.Message}");
+    
+    if (ex.Message.Contains("connection") || ex.Message.Contains("timeout"))
+    {
+        Console.WriteLine();
+        Console.WriteLine("💡 Make sure the Sandstorm API service is running:");
+        Console.WriteLine("   cd Sandstorm.Orchestrator && dotnet run");
+        Console.WriteLine("   Default endpoint: http://localhost:5000");
+    }
 }
 
 Console.WriteLine("\nDemo completed. Press any key to exit...");
