@@ -38,7 +38,7 @@ public class AzureImageBuilder
     public async Task<string> CreateCustomImageAsync(
         string resourceGroupName,
         string imageName,
-        string region = "westus2",
+        string region = "eastus",
         string? orchestratorEndpoint = null,
         CancellationToken cancellationToken = default)
     {

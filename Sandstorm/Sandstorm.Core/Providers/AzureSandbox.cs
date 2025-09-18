@@ -17,8 +17,9 @@ namespace Sandstorm.Core.Providers;
 /// </summary>
 internal class AzureSandbox : ISandbox
 {
-    const bool CREATE_PUBLIC_IP = false; // set to true when debuging
-    private readonly SandboxConfiguration _configuration;
+    const bool CREATE_PUBLIC_IP = false;
+    private readonly AzureSandboxConfiguration _configuration;
+    private readonly SandboxConfiguration _baseConfiguration;
     private readonly string _resourceGroupName;
     private readonly string _orchestratorEndpoint;
     private readonly ArmClient _armClient;
@@ -34,12 +35,13 @@ internal class AzureSandbox : ISandbox
 
     public AzureSandbox(SandboxConfiguration configuration, string resourceGroupName, string orchestratorEndpoint, ArmClient armClient, ILogger? logger)
     {
-        _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
-        _resourceGroupName = resourceGroupName ?? throw new ArgumentNullException(nameof(resourceGroupName));
-        _orchestratorEndpoint = orchestratorEndpoint ?? throw new ArgumentNullException(nameof(orchestratorEndpoint));
-        _armClient = armClient ?? throw new ArgumentNullException(nameof(armClient));
+        _baseConfiguration = configuration;
+        _configuration = new AzureSandboxConfiguration { Name = configuration.Name, CustomImageId = configuration.ImageId };
+        _resourceGroupName = resourceGroupName;
+        _orchestratorEndpoint = orchestratorEndpoint;
+        _armClient = armClient;
         _logger = logger;
-        _sandboxId = $"sandbox-{Guid.NewGuid():N}";
+        _sandboxId = configuration.Name;
 
         // Initialize orchestrator client
         _orchestratorClient = new OrchestratorClient(_orchestratorEndpoint, _logger);
@@ -47,7 +49,7 @@ internal class AzureSandbox : ISandbox
 
     public string SandboxId => _sandboxId;
     public SandboxStatus Status => _status;
-    public SandboxConfiguration Configuration => _configuration;
+    public SandboxConfiguration Configuration => _baseConfiguration;
     public string? PublicIpAddress => _publicIpAddress;
 
     public async Task CreateAsync(CancellationToken cancellationToken = default)
@@ -62,13 +64,8 @@ internal class AzureSandbox : ISandbox
             // Create Resource Group
             _logger?.LogDebug("Creating resource group: {ResourceGroupName}", _resourceGroupName);
             var subscription = _armClient.GetDefaultSubscription();
-            var resourceGroupData = new ResourceGroupData(AzureLocation.WestUS2);
+            var resourceGroupData = new ResourceGroupData(AzureLocation.EastUS);
 
-            // Add tags
-            foreach (var tag in _configuration.Tags)
-            {
-                resourceGroupData.Tags.Add(tag.Key, tag.Value);
-            }
             resourceGroupData.Tags.Add("SandstormSandboxId", _sandboxId);
             resourceGroupData.Tags.Add("CreatedAt", DateTimeOffset.UtcNow.ToString("O"));
 

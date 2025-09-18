@@ -29,7 +29,11 @@ public class AzureProvider : ICloudProvider
     /// <param name="subscriptionId">Azure subscription ID</param>
     /// <param name="tenantId">Azure tenant ID (optional)</param>
     /// <param name="logger">Optional logger</param>
-    public AzureProvider(TokenCredential credential, string subscriptionId, string? tenantId = null, ILogger<AzureProvider>? logger = null)
+    public AzureProvider(
+        TokenCredential credential,
+        string subscriptionId,
+        string? tenantId = null,
+        ILogger<AzureProvider>? logger = null)
     {
         _credential = credential ?? throw new ArgumentNullException(nameof(credential));
         _subscriptionId = subscriptionId ?? throw new ArgumentNullException(nameof(subscriptionId));
@@ -51,11 +55,14 @@ public class AzureProvider : ICloudProvider
     {
     }
 
-    public async Task<ISandbox> CreateSandboxAsync(SandboxConfiguration config, string orchestratorEndpoint, CancellationToken cancellationToken = default)
+    public async Task<ISandbox> CreateSandboxAsync(
+        SandboxConfiguration config,
+        string orchestratorEndpoint,
+        CancellationToken cancellationToken = default)
     {
         _logger?.LogInformation("Creating Azure sandbox: {SandboxName}", config.Name);
 
-        var resourceGroupName = config.ResourceGroupName ?? $"sandstorm-rg-s{config.Name}";
+        var resourceGroupName = config.Name ?? $"sandstorm-rg-{config.Name}";
         var sandbox = new AzureSandbox(config, resourceGroupName, orchestratorEndpoint, _armClient, _logger);
 
         _sandboxes[sandbox.SandboxId] = sandbox;
@@ -91,5 +98,19 @@ public class AzureProvider : ICloudProvider
         // Return cached sandboxes for now
         // In production, you'd query Azure resources to find sandboxes
         return Task.FromResult<IEnumerable<ISandbox>>(_sandboxes.Values.ToList());
+    }
+
+    public async Task<string> CreateDaultImage(string orchestratorEndpoint, CancellationToken cancellationToken = default)
+    {
+        _logger?.LogInformation("Creating default Azure VM image with orchestrator endpoint: {OrchestratorEndpoint}", orchestratorEndpoint);
+        var imageBuilder = new AzureImageBuilder(_armClient, _logger);
+        var imageId = await imageBuilder.CreateCustomImageAsync(
+            "sandstorm-base-image",
+            $"sandstorm-default-image-{Guid.NewGuid()}",
+            orchestratorEndpoint: orchestratorEndpoint
+        );
+
+        _logger?.LogInformation("Default Azure VM image created with ID: {ImageId}", imageId);
+        return imageId;
     }
 }

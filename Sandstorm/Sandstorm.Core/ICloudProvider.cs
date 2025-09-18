@@ -30,4 +30,6 @@ public interface ICloudProvider
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Collection of active sandboxes</returns>
     Task<IEnumerable<ISandbox>> ListSandboxesAsync(CancellationToken cancellationToken = default);
+
+    Task<string> CreateDaultImage(string orchestratorEndpoint, CancellationToken cancellationToken = default);
 }
