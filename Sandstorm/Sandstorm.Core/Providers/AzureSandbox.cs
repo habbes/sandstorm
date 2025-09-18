@@ -226,13 +226,7 @@ internal class AzureSandbox : ISandbox
                         StorageAccountType = StorageAccountType.PremiumLrs // Use SSD for faster startup
                     }
                 },
-                ImageReference = new ImageReference()
-                {
-                    Publisher = "Canonical",
-                    Offer = "0001-com-ubuntu-server-jammy",
-                    Sku = "22_04-lts-gen2",
-                    Version = "latest",
-                }
+                ImageReference = GetImageReference()
             }
         };
 
@@ -252,6 +246,40 @@ internal class AzureSandbox : ISandbox
     }
 
     private string GenerateCloudInitScript()
+    {
+        if (!string.IsNullOrEmpty(_configuration.CustomImageId))
+        {
+            // For custom images, we assume all dependencies are pre-installed
+            // Only need to configure environment and start the agent
+            return GenerateMinimalCloudInitScript();
+        }
+        else
+        {
+            // For base images, install everything from scratch
+            return GenerateFullCloudInitScript();
+        }
+    }
+
+    private string GenerateMinimalCloudInitScript()
+    {
+        return $@"#cloud-config
+write_files:
+  - path: /etc/environment
+    content: |
+      SANDSTORM_SANDBOX_ID={_sandboxId}
+      SANDSTORM_VM_ID={Environment.MachineName}
+      SANDSTORM_ORCHESTRATOR_ENDPOINT={_orchestratorEndpoint}
+    append: true
+runcmd:
+  - echo 'Configuring Sandstorm Agent for sandbox {_sandboxId}' >> /var/log/sandbox-agent-install.log
+  - systemctl daemon-reload
+  - systemctl enable sandstorm-agent
+  - systemctl start sandstorm-agent
+  - echo 'Sandbox initialization complete' > /var/log/sandbox-ready.log
+";
+    }
+
+    private string GenerateFullCloudInitScript()
     {
         return $@"#cloud-config
 package_update: true
@@ -408,6 +436,31 @@ runcmd:
         }
 
         throw new TimeoutException($"VM failed to start within {timeout.TotalMinutes} minutes");
+    }
+
+    private ImageReference GetImageReference()
+    {
+        if (!string.IsNullOrEmpty(_configuration.CustomImageId))
+        {
+            // Use custom pre-baked image
+            _logger?.LogInformation("Using custom VM image: {CustomImageId}", _configuration.CustomImageId);
+            return new ImageReference()
+            {
+                Id = new Azure.Core.ResourceIdentifier(_configuration.CustomImageId)
+            };
+        }
+        else
+        {
+            // Use default Ubuntu image
+            _logger?.LogInformation("Using default Ubuntu image");
+            return new ImageReference()
+            {
+                Publisher = "Canonical",
+                Offer = "0001-com-ubuntu-server-jammy",
+                Sku = "22_04-lts-gen2",
+                Version = "latest",
+            };
+        }
     }
 
     public async Task WaitForReadyAsync(CancellationToken cancellationToken = default)

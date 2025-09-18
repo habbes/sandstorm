@@ -15,6 +15,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Sandstorm.Orchestrator", "S
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Sandstorm.Agent", "Sandstorm.Agent\Sandstorm.Agent.csproj", "{A1B2C3D4-E5F6-A7B8-C9D0-E1F2A3B4C5D6}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Sandstorm.ImageBuilder", "Sandstorm.ImageBuilder\Sandstorm.ImageBuilder.csproj", "{E1D5548D-B449-4C04-A0EB-27C8D87A4006}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Sandstorm.CustomImageDemo", "Sandstorm.CustomImageDemo\Sandstorm.CustomImageDemo.csproj", "{DA2C21B5-50FF-4612-9441-8689BC91883A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -45,6 +49,14 @@ Global
 		{A1B2C3D4-E5F6-A7B8-C9D0-E1F2A3B4C5D6}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A1B2C3D4-E5F6-A7B8-C9D0-E1F2A3B4C5D6}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A1B2C3D4-E5F6-A7B8-C9D0-E1F2A3B4C5D6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E1D5548D-B449-4C04-A0EB-27C8D87A4006}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E1D5548D-B449-4C04-A0EB-27C8D87A4006}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E1D5548D-B449-4C04-A0EB-27C8D87A4006}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E1D5548D-B449-4C04-A0EB-27C8D87A4006}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DA2C21B5-50FF-4612-9441-8689BC91883A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DA2C21B5-50FF-4612-9441-8689BC91883A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DA2C21B5-50FF-4612-9441-8689BC91883A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DA2C21B5-50FF-4612-9441-8689BC91883A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
