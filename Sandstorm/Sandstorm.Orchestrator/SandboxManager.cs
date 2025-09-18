@@ -28,7 +28,7 @@ public class SandboxManager
     public async Task<ISandbox> CreateAsync(CancellationToken cancellationToken = default)
     {
         await EnsureInitialized();
-        return await CreateAsync(new SandboxConfiguration(), cancellationToken);
+        return await CreateAsync(new SandboxConfiguration() { ImageId = _state.DefaultVmImageId }, cancellationToken);
     }
 
     public async Task<ISandbox> CreateAsync(SandboxConfiguration configuration, CancellationToken cancellationToken = default)
